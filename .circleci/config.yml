@@ -31,6 +31,7 @@ _save_cache: &save_cache
 jobs:
   build:
     <<: *defaults
+    resource_class: large
     steps:
       - checkout
       - run: *setenv
