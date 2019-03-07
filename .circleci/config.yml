@@ -69,7 +69,7 @@ jobs:
           <<: *restore_cache
 
       - run: python --version
-      - run: pip install setuptools || pip3 install setuptools
+      - run: python -m pip install setuptools
       - run: cat /dev/null | sbt pyrasterframes/test
       - run: cat /dev/null | sbt core/test
       - run: cat /dev/null | sbt datasource/test
