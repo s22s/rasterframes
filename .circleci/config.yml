@@ -112,45 +112,25 @@ workflows:
   version: 2
   all:
     jobs:
-      - test:
-          filters:
-            branches:
-              ignore:
-                - develop
-                - master
-                - /release.*/
+      - test
       - it:
           filters:
             branches:
               only:
                 - /feature\/.*-its/
-                - feature/circleci
       - publish:
           filters:
             branches:
               only:
-                - develop
-                - master
-                - /release.*/
-  nightlyDevelop:
+                - feature/astraea
+  nightlyReleaseAstraea:
     triggers:
       - schedule:
           cron: "0 8 * * *"
           filters:
             branches:
               only:
-                - develop
+                - feature/astraea
     jobs:
       - it
-      - staticAnalysis
-
-  nightlyMaster:
-    triggers:
-      - schedule:
-          cron: "0 8 * * *"
-          filters:
-            branches:
-              only:
-                - master
-    jobs:
       - staticAnalysis
