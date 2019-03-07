@@ -68,7 +68,7 @@ jobs:
       - restore_cache:
           <<: *restore_cache
 
-      - run: apt-get install python-pip
+      - run: sudo apt-get install python-pip
       - run: pip install setuptools
       - run: cat /dev/null | sbt pyrasterframes/test
       - run: cat /dev/null | sbt core/test
