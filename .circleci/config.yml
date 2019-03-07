@@ -29,7 +29,36 @@ _save_cache: &save_cache
     - ~/.sbt
 
 jobs:
-  build:
+  staticAnalysis:
+    <<: *defaults
+
+    steps:
+      - checkout
+      - run: *setenv
+      - restore_cache:
+          <<: *restore_cache
+
+      - run: cat /dev/null | sbt dependencyCheck
+      - run: cat /dev/null | sbt --debug dumpLicenseReport
+
+      - run: *unsetenv
+
+      - save_cache:
+          <<: *save_cache
+      - store_artifacts:
+          path: datasource/target/scala-2.11/dependency-check-report.html
+          destination: dependency-check-report-datasource.html
+      - store_artifacts:
+          path: experimental/target/scala-2.11/dependency-check-report.html
+          destination: dependency-check-report-experimental.html
+      - store_artifacts:
+          path: core/target/scala-2.11/dependency-check-report.html
+          destination: dependency-check-report-core.html
+      - store_artifacts:
+          path: pyrasterframes/target/scala-2.11/dependency-check-report.html
+          destination: dependency-check-report-pyrasterframes.html
+
+  test:
     <<: *defaults
     resource_class: large
     steps:
@@ -38,7 +67,7 @@ jobs:
       - restore_cache:
           <<: *restore_cache
 
-      - run: cat /dev/null | sbt -Dfile.encoding=UTF8 clean core/test datasource/test
+      - run: cat /dev/null | sbt test
 
       - run: *unsetenv
       - save_cache:
@@ -52,25 +81,48 @@ jobs:
       - restore_cache:
           <<: *restore_cache
 
-      - run: cat /dev/null | sbt sbt -Dfile.encoding=UTF8 clean core/test datasource/test
-      - run: cat /dev/null | sbt sbt -Dfile.encoding=UTF8 publish
+      - run: cat /dev/null | sbt test
+      - run: cat /dev/null | sbt publish
 
       - run: *unsetenv
       - save_cache:
           <<: *save_cache
 
+  it:
+    <<: *defaults
+    resource_class: xlarge
+    steps:
+      - checkout
+      - run: *setenv
+
+      - restore_cache:
+          <<: *restore_cache
+
+      - run:
+          command: cat /dev/null | sbt it:test
+          no_output_timeout: 30m
+      - run: *unsetenv
+
+      - save_cache:
+          <<: *save_cache
 
 workflows:
   version: 2
   all:
     jobs:
-      - build:
+      - test:
           filters:
             branches:
               ignore:
                 - develop
                 - master
                 - /release.*/
+      - it:
+          filters:
+            branches:
+              only:
+                - /feature\/.*-its/
+                - feature/circleci
       - publish:
           filters:
             branches:
@@ -78,3 +130,25 @@ workflows:
                 - develop
                 - master
                 - /release.*/
+  nightlyDevelop:
+    triggers:
+      - schedule:
+          cron: "0 8 * * *"
+          filters:
+            branches:
+              only:
+                - develop
+    jobs:
+      - it
+      - staticAnalysis
+
+  nightlyMaster:
+    triggers:
+      - schedule:
+          cron: "0 8 * * *"
+          filters:
+            branches:
+              only:
+                - master
+    jobs:
+      - staticAnalysis
