@@ -1,0 +1,79 @@
+version: 2
+
+_defaults: &defaults
+  working_directory: ~/repo
+  environment:
+    TERM: dumb
+  docker:
+    - image: circleci/openjdk:8-jdk
+
+_setenv: &setenv
+  name: set CloudRepo credentials
+  command: |-
+    [ -d $HOME/.sbt ] || mkdir $HOME/.sbt
+    printf "realm=s22s.mycloudrepo.io\nhost=s22s.mycloudrepo.io\nuser=$CLOUDREPO_USER\npassword=$CLOUDREPO_PASSWORD\n" > $HOME/.sbt/.credentials
+
+_delenv: &unsetenv
+  name: delete CloudRepo credential
+  command: rm -rf  $HOME/.sbt/.credentials || true
+
+_restore_cache: &restore_cache
+  keys:
+    - v1-dependencies-{{ checksum "build.sbt" }}
+    - v1-dependencies-
+
+_save_cache: &save_cache
+  key: v1-dependencies--{{ checksum "build.sbt" }}
+  paths:
+    - ~/.ivy2/cache
+    - ~/.sbt
+
+jobs:
+  build:
+    <<: *defaults
+    steps:
+      - checkout
+      - run: *setenv
+      - restore_cache:
+          <<: *restore_cache
+
+      - run: cat /dev/null | sbt -Dfile.encoding=UTF8 clean core/test datasource/test
+
+      - run: *unsetenv
+      - save_cache:
+          <<: *save_cache
+
+  publish:
+    <<: *defaults
+    steps:
+      - checkout
+      - run: *setenv
+      - restore_cache:
+          <<: *restore_cache
+
+      - run: cat /dev/null | sbt sbt -Dfile.encoding=UTF8 clean core/test datasource/test
+      - run: cat /dev/null | sbt sbt -Dfile.encoding=UTF8 publish
+
+      - run: *unsetenv
+      - save_cache:
+          <<: *save_cache
+
+
+workflows:
+  version: 2
+  all:
+    jobs:
+      - build:
+          filters:
+            branches:
+              ignore:
+                - develop
+                - master
+                - /release.*/
+      - publish:
+          filters:
+            branches:
+              only:
+                - develop
+                - master
+                - /release.*/
