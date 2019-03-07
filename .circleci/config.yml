@@ -67,7 +67,11 @@ jobs:
       - restore_cache:
           <<: *restore_cache
 
-      - run: cat /dev/null | sbt test
+      - run: pip install setuptools
+      - run: cat /dev/null | sbt pyrasterframes/test
+      - run: cat /dev/null | sbt core/test
+      - run: cat /dev/null | sbt datasource/test
+      - run: cat /dev/null | sbt experimental/test
 
       - run: *unsetenv
       - save_cache:
