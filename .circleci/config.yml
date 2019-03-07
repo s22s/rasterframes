@@ -19,11 +19,11 @@ _delenv: &unsetenv
 
 _restore_cache: &restore_cache
   keys:
-    - v1-dependencies-{{ checksum "build.sbt" }}
-    - v1-dependencies-
+    - v2-dependencies-{{ checksum "build.sbt" }}
+    - v2-dependencies-
 
 _save_cache: &save_cache
-  key: v1-dependencies--{{ checksum "build.sbt" }}
+  key: v2-dependencies--{{ checksum "build.sbt" }}
   paths:
     - ~/.ivy2/cache
     - ~/.sbt
@@ -68,12 +68,8 @@ jobs:
       - restore_cache:
           <<: *restore_cache
 
-      - run: sudo apt-get install python-pip
-      - run: pip install setuptools
-      - run: cat /dev/null | sbt pyrasterframes/test
-      - run: cat /dev/null | sbt core/test
-      - run: cat /dev/null | sbt datasource/test
-      - run: cat /dev/null | sbt experimental/test
+      - run: sudo apt-get install python-pip && pip install setuptools # required for pyrasterframes testing
+      - run: cat /dev/null | sbt test
 
       - run: *unsetenv
       - save_cache:
