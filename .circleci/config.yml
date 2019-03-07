@@ -27,6 +27,7 @@ _save_cache: &save_cache
   paths:
     - ~/.ivy2/cache
     - ~/.sbt
+    - ~/.rf_cache
 
 jobs:
   staticAnalysis:
