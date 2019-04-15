@@ -1,11 +1,11 @@
 import sbt.{IO, _}
 
 import scala.sys.process.Process
+import PIPBuildPlugin.autoImport.Python
 
 moduleName := "rasterframes-deployment"
 
 val Docker = config("docker")
-val Python = config("python")
 
 
 lazy val rfDockerImageName = settingKey[String]("Name to tag Docker image with.")

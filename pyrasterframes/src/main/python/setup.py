@@ -6,7 +6,7 @@ The operations in this file are designed for development and testing only.
 from setuptools import setup, find_packages
 import distutils.log
 import importlib
-
+import os
 
 def _extract_module(mod):
     module = importlib.import_module(mod)
@@ -15,7 +15,6 @@ def _extract_module(mod):
         globals().update({n: getattr(module, n) for n in module.__all__})
     else:
         globals().update({k: v for (k, v) in module.__dict__.items() if not k.startswith('_')})
-
 
 
 class ExampleCommand(distutils.cmd.Command):
@@ -52,7 +51,6 @@ class ExampleCommand(distutils.cmd.Command):
         self.examples = map(lambda x: 'examples.' + x.stem,
                             map(self._check_ex_path, self.examples))
 
-
     def run(self):
         """Run the examples."""
         import traceback
@@ -81,7 +79,6 @@ class ZipCommand(distutils.cmd.Command):
         """Create the zip."""
         import zipfile
         from pathlib import Path
-        import os
         zfile = 'pyrasterframes.zip'
 
         if os.path.isfile(zfile):
@@ -99,8 +96,6 @@ class ZipCommand(distutils.cmd.Command):
 
 
 
-
-
 with open('README.rst') as f:
     readme = f.read()
 
@@ -111,10 +106,8 @@ setup_args = dict(
     name='pyrasterframes',
     description='Python bindings for RasterFrames',
     long_description=readme,
-    version='0.0.1',
+    version=os.environ.get('RASTERFRAMES_VERSION', 'NONE'),
     url='http://rasterframes.io',
-    author='D. Benjamin Guseman',
-    author_email='guseman@astraea.io',
     license='Apache 2',
     setup_requires=['pytest-runner', pyspark_ver, 'pathlib'],
     install_requires=[
@@ -130,8 +123,8 @@ setup_args = dict(
         'pandas',
     ],
     test_suite="pytest-runner",
-    packages=find_packages(exclude=['tests', 'examples']),
-    include_package_data=True,
+    packages=find_packages(),
+    include_package_data=False,
     package_data={'.':['LICENSE.md'], 'pyrasterframes':['*.jar']},
     exclude_package_data={'.':['setup.*', 'README.*']},
     classifiers=[
@@ -145,8 +138,7 @@ setup_args = dict(
     ],
     zip_safe=False,
     cmdclass={
-        'examples': ExampleCommand,
-        'minzip': ZipCommand
+        'examples': ExampleCommand
     }
     # entry_points={
     #     "console_scripts": ['pyrasterframes=pyrasterframes:console']
