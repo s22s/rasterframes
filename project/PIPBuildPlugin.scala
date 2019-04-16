@@ -38,6 +38,7 @@ object PIPBuildPlugin extends AutoPlugin {
   }
   import autoImport._
 
+  /** Copies all the python sources to the target/build area, keeping source area clean.*/
   val copyPySources = Def.task {
     val s = streams.value
     val src = (Compile / pythonSource).value
@@ -48,14 +49,15 @@ object PIPBuildPlugin extends AutoPlugin {
     dest
   }
 
-  val buildPyDist= Def.task {
+  /** Builds python distribution. */
+  val pyDist = Def.task {
     val buildDir = (Python / target).value
     val pyDist = (packageBin / artifactPath).value
-    val retcode = pySetup.toTask(" build sdist --formats=zip").value
+    val retcode = pySetup.toTask(" bdist_wheel").value
     if(retcode != 0) throw new RuntimeException(s"'python setup.py' returned $retcode")
-    val art = (Python / packageBin / artifact).value
-    val ver = version.value
-    IO.move(buildDir / "dist" / s"${art.name}-$ver.zip", pyDist)
+    val results = IO.listFiles(buildDir / "dist", "*.whl")
+    require(results.length == 1, s"Expected to find single '.whl' file in ${buildDir / "dist"}")
+    IO.copyFile(results.head, pyDist)
     pyDist
   }
 
@@ -63,7 +65,9 @@ object PIPBuildPlugin extends AutoPlugin {
 
   override def projectSettings = Seq(
     assembly / test := {},
+    // Python command path
     pythonCommand := "python",
+    // Run 'python setup.py' as in input task with arguments
     pySetup := {
       val s = streams.value
       val wd = copyPySources.value
@@ -73,23 +77,35 @@ object PIPBuildPlugin extends AutoPlugin {
       s.log.info(s"Running '${cmd.mkString(" ")}' in $wd")
       Process(cmd, wd, "RASTERFRAMES_VERSION" -> ver).!
     },
+    // Set the default path to python module sources
     Compile / pythonSource := (Compile / sourceDirectory).value / "python",
+    // Register python directory as a source directory
+    Python / unmanagedSourceDirectories := Seq((Compile / pythonSource).value),
+    // Set the default path to python test sources
     Test / pythonSource := (Test / sourceDirectory).value / "python",
-    Compile / `package` := (Compile / `package`).dependsOn(Python / packageBin).value
+    // Add python test directory as a test source directory
+    Python / unmanagedSourceDirectories := Seq((Test / pythonSource).value),
+    // Add .py as a recognized python source extension
+    unmanagedSources / includeFilter := (unmanagedSources / includeFilter).value ||
+      (GlobFilter("*.py") | "*.cfg" | "*.in") -- DirectoryFilter,
+    Compile / `package` := (Compile / `package`).dependsOn(Python / packageBin).value,
+    Compile / packageBin / artifactPath := {
+      val dir = (Python / target).value
+      val art = (packageBin / artifact).value
+      val fileName = (Compile / packageBin / artifactPath).value.getName
+      dir / art.name / fileName
+    }
   ) ++
     inConfig(Python)(Seq(
       target := target.value / "python",
-      packageBin := Def.sequential(
-        Compile / packageBin,
-        buildPyDist
-      ).value,
+      packageBin := Def.sequential(Compile / packageBin, pyDist).value,
       packageBin / artifact := {
         val java = (Compile / packageBin / artifact).value
         java.withType("zip").withClassifier(Some("python")).withExtension("zip")
       },
       packageBin / artifactPath := {
-        val dest = (Compile / packageBin / artifactPath).value.getParentFile
-        val art = (Python / packageBin / artifact).value
+        val art = (packageBin / artifact).value
+        val dest = (Compile / target).value
         val ver = version.value
         dest / s"${art.name}-python-$ver.zip"
       },
