@@ -32,6 +32,7 @@ import org.apache.spark.sql.rf._
 import org.apache.spark.sql.types.{DataType, StructField, StructType}
 
 import scala.util.control.NonFatal
+import astraea.spark.rasterframes.TileType
 
 /**
  * Accepts RasterRef and generates one or more RasterRef instances representing the
@@ -43,8 +44,6 @@ case class RasterSourceToTiles(children: Seq[Expression], applyTiling: Boolean) 
   with Generator with CodegenFallback with ExpectsInputTypes with LazyLogging {
 
   private val RasterSourceType = new RasterSourceUDT()
-  private val TileType = new TileUDT()
-
   override def inputTypes: Seq[DataType] = Seq.fill(children.size)(RasterSourceType)
   override def nodeName: String = "raster_source_to_tile"
 
@@ -59,12 +58,9 @@ case class RasterSourceToTiles(children: Seq[Expression], applyTiling: Boolean) 
       val refs = children.map { child ⇒
         val src = RasterSourceType.deserialize(child.eval(input))
         val tiles = if (applyTiling) src.readAll() else {
-          src.read(src.extent).right.map(Seq(_)).left.map(Seq(_))
+          Seq(src.read(src.extent))
         }
-
-        require(tiles.isLeft, "Multiband tiles are not yet supported")
-
-        tiles.left.get
+        tiles.map(_.mapTile(_.band(0)))
       }
       refs.transpose.map(ts ⇒ InternalRow(ts.map(r ⇒ r.tile.toInternalRow): _*))
     }

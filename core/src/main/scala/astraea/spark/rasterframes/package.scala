@@ -17,6 +17,7 @@
 package astraea.spark
 
 import astraea.spark.rasterframes.encoders.StandardEncoders
+import astraea.spark.rasterframes.model.TileDimensions
 import astraea.spark.rasterframes.util.ZeroSevenCompatibilityKit
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
@@ -24,10 +25,10 @@ import geotrellis.raster.{Tile, TileFeature}
 import geotrellis.spark.{ContextRDD, Metadata, SpaceTimeKey, SpatialKey, TileLayerMetadata}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
+import org.apache.spark.sql.rf.TileUDT
 import org.locationtech.geomesa.spark.jts.DataFrameFunctions
 import shapeless.tag.@@
 
-import scala.language.higherKinds
 import scala.reflect.runtime.universe._
 
 /**
@@ -52,6 +53,7 @@ package object rasterframes extends StandardColumns
   /** The generally expected tile size, as defined by configuration property `rasterframes.nominal-tile-size`.*/
   @transient
   final val NOMINAL_TILE_SIZE: Int = rfConfig.getInt("nominal-tile-size")
+  final val NOMINAL_TILE_DIMS: TileDimensions = TileDimensions(NOMINAL_TILE_SIZE, NOMINAL_TILE_SIZE)
 
   /**
    * Initialization injection point. Must be called before any RasterFrame
@@ -82,6 +84,9 @@ package object rasterframes extends StandardColumns
     rasterframes.expressions.register(sqlContext)
     rasterframes.rules.register(sqlContext)
   }
+
+  /** TileUDT type reference. */
+  def TileType = new TileUDT()
 
   /**
    * A RasterFrame is just a DataFrame with certain invariants, enforced via the methods that create and transform them:

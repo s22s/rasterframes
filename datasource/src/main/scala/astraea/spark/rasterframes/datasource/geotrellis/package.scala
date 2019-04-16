@@ -21,7 +21,7 @@ package astraea.spark.rasterframes.datasource
 import java.net.URI
 
 import _root_.geotrellis.spark.LayerId
-import astraea.spark.rasterframes.datasource.geotrellis.DefaultSource._
+import astraea.spark.rasterframes.datasource.geotrellis.GeoTrellisLayerDataSource._
 import astraea.spark.rasterframes.{RasterFrame, _}
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.col
@@ -79,12 +79,12 @@ package object geotrellis extends DataSourceOptions {
   implicit class GeoTrellisReaderWithRF(val reader: GeoTrellisRasterFrameReader) {
     def withTileSubdivisions(divs: Int): GeoTrellisRasterFrameReader =
       tag[GeoTrellisRasterFrameReaderTag][DataFrameReader](
-        reader.option(TILE_SUBDIVISIONS_PARAM, divs)
+        reader.option(TILE_SUBDIVISIONS_PARAM, divs.toLong)
       )
 
     def withNumPartitions(partitions: Int): GeoTrellisRasterFrameReader =
       tag[GeoTrellisRasterFrameReaderTag][DataFrameReader](
-        reader.option(NUM_PARTITIONS_PARAM, partitions)
+        reader.option(NUM_PARTITIONS_PARAM, partitions.toLong)
       )
 
     def loadRF(uri: URI, id: LayerId): RasterFrame =

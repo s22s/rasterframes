@@ -21,7 +21,6 @@
 
 package astraea.spark.rasterframes.expressions.transformers
 
-import astraea.spark.rasterframes.encoders.CatalystSerializer
 import astraea.spark.rasterframes.encoders.CatalystSerializer._
 import geotrellis.vector.Extent
 import org.apache.spark.sql.catalyst.analysis.TypeCheckResult
@@ -37,10 +36,10 @@ import org.apache.spark.sql.{Column, TypedColumn}
  *
  * @since 8/24/18
  */
-case class GeometryToBounds(child: Expression) extends UnaryExpression with CodegenFallback {
+case class GeometryToExtent(child: Expression) extends UnaryExpression with CodegenFallback {
   override def nodeName: String = "geometry_bounds"
 
-  override def dataType: DataType = CatalystSerializer[Extent].schema
+  override def dataType: DataType = schemaOf[Extent]
 
   override def checkInputDataTypes(): TypeCheckResult = {
     child.dataType match {
@@ -54,13 +53,13 @@ case class GeometryToBounds(child: Expression) extends UnaryExpression with Code
   override protected def nullSafeEval(input: Any): Any = {
     val geom = JTSTypes.GeometryTypeInstance.deserialize(input)
     val extent = Extent(geom.getEnvelopeInternal)
-    CatalystSerializer[Extent].toInternalRow(extent)
+    extent.toInternalRow
   }
 }
 
-object GeometryToBounds {
+object GeometryToExtent {
   import astraea.spark.rasterframes.encoders.StandardEncoders._
 
   def apply(bounds: Column): TypedColumn[Any, Extent] =
-    new Column(new GeometryToBounds(bounds.expr)).as[Extent]
+    new Column(new GeometryToExtent(bounds.expr)).as[Extent]
 }

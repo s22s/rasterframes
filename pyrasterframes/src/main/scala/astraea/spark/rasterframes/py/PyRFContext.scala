@@ -19,7 +19,7 @@
 package astraea.spark.rasterframes.py
 
 import astraea.spark.rasterframes._
-import astraea.spark.rasterframes.util.CRSParser
+import astraea.spark.rasterframes.model.LazyCRS
 import org.locationtech.jts.geom.Geometry
 import geotrellis.raster.{ArrayTile, CellType, MultibandTile}
 import geotrellis.spark.io._
@@ -184,7 +184,7 @@ class PyRFContext(implicit sparkSession: SparkSession) extends RasterFunctions
 
   def spatialJoin(df: DataFrame, right: DataFrame): RasterFrame = df.asRF.spatialJoin(right.asRF)
 
-  def withBounds(df: DataFrame): RasterFrame = df.asRF.withBounds()
+  def withBounds(df: DataFrame): RasterFrame = df.asRF.withGeometry()
 
   def withCenter(df: DataFrame): RasterFrame = df.asRF.withCenter()
 
@@ -193,8 +193,8 @@ class PyRFContext(implicit sparkSession: SparkSession) extends RasterFunctions
   def withSpatialIndex(df: DataFrame): RasterFrame = df.asRF.withSpatialIndex()
 
   def reproject_geometry(geometryCol: Column, srcName: String, dstName: String): Column = {
-    val src = CRSParser(srcName)
-    val dst = CRSParser(dstName)
+    val src = LazyCRS(srcName)
+    val dst = LazyCRS(dstName)
     reproject_geometry(geometryCol, src, dst)
   }
 

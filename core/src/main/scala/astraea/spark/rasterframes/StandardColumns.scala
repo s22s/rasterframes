@@ -2,13 +2,13 @@ package astraea.spark.rasterframes
 
 import java.sql.Timestamp
 
-import geotrellis.raster.{Tile, TileFeature}
+import astraea.spark.rasterframes.encoders.StandardEncoders.PrimitiveEncoders._
+import geotrellis.proj4.CRS
+import geotrellis.raster.Tile
 import geotrellis.spark.{SpatialKey, TemporalKey}
+import geotrellis.vector.{Extent, ProjectedExtent}
 import org.apache.spark.sql.functions.col
 import org.locationtech.jts.geom.{Point => jtsPoint, Polygon => jtsPolygon}
-import geotrellis.proj4.CRS
-import geotrellis.vector.Extent
-import astraea.spark.rasterframes.encoders.StandardEncoders.PrimitiveEncoders._
 
 /**
  * Constants identifying column in most RasterFrames.
@@ -25,10 +25,9 @@ trait StandardColumns {
   /** Default RasterFrame timestamp column name */
   val TIMESTAMP_COLUMN = col("timestamp").as[Timestamp]
 
-
-  /** Default RasterFrame column name for an tile bounds value. */
+  /** Default RasterFrame column name for an tile extent as geometry value. */
   // This is a `def` because `PolygonUDT` needs to be initialized first.
-  def BOUNDS_COLUMN = col("bounds").as[jtsPolygon]
+  def GEOMETRY_COLUMN = col("geometry").as[jtsPolygon]
 
   /** Default RasterFrame column name for the center coordinates of the tile's bounds. */
   // This is a `def` because `PointUDT` needs to be initialized first.
@@ -36,6 +35,9 @@ trait StandardColumns {
 
   /** Default Extent column name. */
   def EXTENT_COLUMN = col("extent").as[Extent]
+
+  /** Default ProjectedExtent column name. */
+  def PROJECTED_EXTENT_COLUMN = col("proj_extent").as[ProjectedExtent]
 
   /** Default CRS column name. */
   def CRS_COLUMN = col("crs").as[CRS]
@@ -47,7 +49,7 @@ trait StandardColumns {
   // This is a `def` because `TileUDT` needs to be initialized first.
   def TILE_COLUMN = col("tile").as[Tile]
 
-  /** Default RasterFrame [[TileFeature.data]] column name. */
+  /** Default RasterFrame `TileFeature.data` column name. */
   val TILE_FEATURE_DATA_COLUMN = col("tile_data")
 
   /** Default GeoTiff tags column. */
@@ -58,6 +60,9 @@ trait StandardColumns {
 
   /** Default teil column index column for the cells of exploded tiles. */
   val ROW_INDEX_COLUMN = col("row_index").as[Int]
+
+  /** URI/URL/S3 path to raster. */
+  val PATH_COLUMN = col("path").as[String]
 }
 
 object StandardColumns extends StandardColumns

@@ -25,14 +25,14 @@ import java.nio.ByteBuffer
 
 import astraea.spark.rasterframes.expressions.TileAssembler.TileBuffer
 import astraea.spark.rasterframes.util._
-import geotrellis.raster.{DataType ⇒ _, _}
+import geotrellis.raster.{DataType => _, _}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.aggregate.{ImperativeAggregate, TypedImperativeAggregate}
 import org.apache.spark.sql.catalyst.expressions.{Expression, ExpressionDescription, ImplicitCastInputTypes}
-import org.apache.spark.sql.rf.TileUDT
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{Column, TypedColumn}
 import spire.syntax.cfor._
+import astraea.spark.rasterframes.TileType
 
 /**
  * Aggregator for reassembling tiles from from exploded form
@@ -77,9 +77,7 @@ case class TileAssembler(
 
   override def inputTypes = Seq(ShortType, ShortType, DoubleType, ShortType, ShortType)
 
-  private val TileType = new TileUDT()
-
-  override def prettyName: String = "assemble_tile"
+  override def prettyName: String = "assemble_tiles"
 
   override def withNewMutableAggBufferOffset(newMutableAggBufferOffset: Int): ImperativeAggregate =
     copy(mutableAggBufferOffset = newMutableAggBufferOffset)
@@ -142,7 +140,7 @@ case class TileAssembler(
     val cells = Array.ofDim[Double](length)
     result.get(cells)
     val (tileCols, tileRows) = buffer.tileSize
-    val tile = ArrayTile(cells, tileCols, tileRows)
+    val tile = ArrayTile(cells, tileCols.toInt, tileRows.toInt)
     TileType.serialize(tile)
   }
 
