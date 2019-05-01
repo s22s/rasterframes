@@ -83,10 +83,10 @@ class GeoTiffDataSourceSpec
 
     it("should read in correctly check-summed contents") {
       // c.f. TileStatsSpec -> computing statistics over tiles -> should compute tile statistics -> sum
-      val rf = spark.read.geotiff.loadRF(l8samplePath)
+      val rf = spark.read.geotiff.loadRF(l8B1SamplePath)
       val expected = 309149454 // computed with rasterio
       val result = rf.agg(
-        sum(tile_sum(rf("tile")))
+        sum(rf_tile_sum(rf("tile")))
       ).collect().head.getDouble(0)
 
       assert(result === expected)

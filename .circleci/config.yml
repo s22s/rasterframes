@@ -6,10 +6,7 @@ _defaults: &defaults
     TERM: dumb
   docker:
     - image: s22s/rasterframes-circleci:latest
-      auth:
-        username: s22s4circleci
-        password: $DOCKERHUB_PASSWORD
-
+      
 _setenv: &setenv
   name: set CloudRepo credentials
   command: |-

@@ -68,10 +68,6 @@ package object functions {
     }
   }
 
-  private[rasterframes] val arrayToTile: (Array[_], Int, Int) ⇒ Tile = (a, cols, rows) ⇒ {
-    arrayToTile(cols, rows).apply(a)
-  }
-
   /** Set the tile's no-data value. */
   private[rasterframes] def withNoData(nodata: Double) = safeEval[Tile, Tile](_.withNoData(Some(nodata)))
 
@@ -142,13 +138,12 @@ package object functions {
 
   def register(sqlContext: SQLContext): Unit = {
     sqlContext.udf.register("rf_make_constant_tile", makeConstantTile)
-    sqlContext.udf.register("rf_tile_zeros", tileZeros)
-    sqlContext.udf.register("rf_tile_ones", tileOnes)
+    sqlContext.udf.register("rf_make_zeros_tile", tileZeros)
+    sqlContext.udf.register("rf_make_ones_tile", tileOnes)
 
     sqlContext.udf.register("rf_cell_types", cellTypes)
     sqlContext.udf.register("rf_rasterize", rasterize)
 
-    sqlContext.udf.register("rf_reproject_geometry", reprojectGeometryCRSName)
-    sqlContext.udf.register("rf_array_to_tile", arrayToTile)
+    sqlContext.udf.register("st_reproject", reprojectGeometryCRSName)
   }
 }
