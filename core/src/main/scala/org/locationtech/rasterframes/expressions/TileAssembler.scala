@@ -77,7 +77,7 @@ case class TileAssembler(
 
   override def inputTypes = Seq(ShortType, ShortType, DoubleType, ShortType, ShortType)
 
-  override def prettyName: String = "assemble_tiles"
+  override def prettyName: String = "rf_assemble_tiles"
 
   override def withNewMutableAggBufferOffset(newMutableAggBufferOffset: Int): ImperativeAggregate =
     copy(mutableAggBufferOffset = newMutableAggBufferOffset)

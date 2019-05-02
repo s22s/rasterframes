@@ -110,6 +110,12 @@ trait TestData {
     require((1 to 11).contains(band), "Invalid band number")
     readSingleband(s"L8-B$band-Elkton-VA.tiff")
   }
+
+  def l8SamplePath(band: Int) = {
+    require((1 to 11).contains(band), "Invalid band number")
+    getClass.getResource(s"/L8-B$band-Elkton-VA.tiff").toURI
+  }
+
   def l8Labels = readSingleband("L8-Labels-Elkton-VA.tiff")
 
   def naipSample(band: Int) = {
@@ -138,8 +144,8 @@ trait TestData {
   lazy val localSentinel: URI = getClass.getResource("/B01.jp2").toURI
   lazy val cogPath: URI = getClass.getResource("/LC08_RGB_Norfolk_COG.tiff").toURI
   lazy val nonCogPath: URI = getClass.getResource("/L8-B8-Robinson-IL.tiff").toURI
-  lazy val l8samplePath: URI = getClass.getResource("/L8-B1-Elkton-VA.tiff").toURI
   lazy val modisConvertedMrfPath: URI = getClass.getResource("/MCD43A4.A2019111.h30v06.006.2019120033434_01.mrf").toURI
+  lazy val l8B1SamplePath: URI = l8SamplePath(1)
 
   object JTS {
     val fact = new GeometryFactory()

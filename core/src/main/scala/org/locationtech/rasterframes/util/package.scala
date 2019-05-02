@@ -32,12 +32,13 @@ import geotrellis.raster.{CellGrid, Tile, isNoData}
 import geotrellis.spark.Bounds
 import geotrellis.spark.tiling.TilerKeyMethods
 import geotrellis.util.{ByteReader, GetComponent}
-import org.apache.spark.sql.catalyst.expressions.{Expression, NamedExpression}
+import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
+import org.apache.spark.sql.catalyst.expressions.{Alias, Expression, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.rf._
 import org.apache.spark.sql.types.StringType
-import org.apache.spark.sql.{Column, DataFrame, SQLContext}
+import org.apache.spark.sql._
 import org.slf4j.LoggerFactory
 import spire.syntax.cfor._
 
@@ -83,17 +84,20 @@ package object util {
 
   /** Tags output column with a nicer name. */
   private[rasterframes]
-  def withAlias(name: String, inputs: Column*)(output: Column) = {
+  def withAlias(name: String, inputs: Column*)(output: Column): Column = {
     val paramNames = inputs.map(_.columnName).mkString(",")
     output.as(s"$name($paramNames)")
   }
+
+  /** Tags output column with a nicer name, yet strongly typed. */
+  private[rasterframes]
+  def withTypedAlias[T: Encoder](name: String, inputs: Column*)(output: Column): TypedColumn[Any, T] =
+    withAlias(name, inputs: _*)(output).as[T]
 
   /** Derives and operator name from the implementing object name. */
   private[rasterframes]
   def opName(op: LocalTileBinaryOp) =
     op.getClass.getSimpleName.replace("$", "").toLowerCase
-
-
 
   implicit class WithCombine[T](left: Option[T]) {
     def combine[A, R >: A](a: A)(f: (T, A) ⇒ R): R = left.map(f(_, a)).getOrElse(a)
@@ -103,7 +107,9 @@ package object util {
   implicit class ExpressionWithName(val expr: Expression) extends AnyVal {
     import org.apache.spark.sql.catalyst.expressions.Literal
     def name: String = expr match {
-      case n: NamedExpression ⇒ n.name
+      case n: NamedExpression if n.resolved ⇒ n.name
+      case UnresolvedAttribute(parts) => parts.mkString("_")
+      case Alias(_, name) => name
       case l: Literal if l.dataType == StringType ⇒ String.valueOf(l.value)
       case o ⇒ o.toString
     }

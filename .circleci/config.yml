@@ -5,11 +5,8 @@ _defaults: &defaults
   environment:
     TERM: dumb
   docker:
-    - image: s22s/rasterframes-circleci:latest
-      auth:
-        username: s22s4circleci
-        password: $DOCKERHUB_PASSWORD
-
+    - image: circleci/openjdk:8-jdk
+      
 _setenv: &setenv
   name: set CloudRepo credentials
   command: |-
@@ -72,6 +69,7 @@ jobs:
       - restore_cache:
           <<: *restore_cache
 
+      - run: sudo apt-get install python-pip pandoc && pip install setuptools # required for pyrasterframes testing
       - run: cat /dev/null | sbt test
 
       - run: *unsetenv
@@ -87,6 +85,7 @@ jobs:
       - restore_cache:
           <<: *restore_cache
 
+      - run: sudo apt-get install python-pip pandoc && pip install setuptools # required for pyrasterframes testing
       - run: cat /dev/null | sbt test
       - run: cat /dev/null | sbt publish
 
