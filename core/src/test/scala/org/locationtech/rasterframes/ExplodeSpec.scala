@@ -133,7 +133,8 @@ class ExplodeSpec extends TestEnvironment with TestData {
     }
 
     it("should reassemble single exploded tile") {
-      val df = Seq[Tile](byteArrayTile).toDF("tile")
+      val tile = TestData.randomTile(10, 10, FloatCellType)
+      val df = Seq[Tile](tile).toDF("tile")
         .select(rf_explode_tiles($"tile"))
 
       val assembled = df.agg(
@@ -141,16 +142,13 @@ class ExplodeSpec extends TestEnvironment with TestData {
         COLUMN_INDEX_COLUMN,
         ROW_INDEX_COLUMN,
         TILE_COLUMN,
-        3, 3, tile.cellType
+          10, 10, tile.cellType
       )).as[Tile]
 
       val result = assembled.first()
       assert(result === tile)
 
-      // and with SQL API
-      logger.info(df.schema.treeString)
-
-      val assembledSqlExpr = df.selectExpr("rf_assemble_tile(column_index, row_index, tile, 3, 3)")
+      val assembledSqlExpr = df.selectExpr("rf_assemble_tile(column_index, row_index, tile, 10, 10)")
 
       val resultSql = assembledSqlExpr.as[Tile].first()
       assert(resultSql === tile)
@@ -162,9 +160,9 @@ class ExplodeSpec extends TestEnvironment with TestData {
       val ct = FloatUserDefinedNoDataCellType(-99)
       val tile = TestData.injectND(3)(TestData.randomTile(5, 5, ct))
       val df = Seq[Tile](tile).toDF("tile")
-        .select(explode_tiles($"tile"))
+        .select(rf_explode_tiles($"tile"))
 
-      val assembled = df.agg(assemble_tile(
+      val assembled = df.agg(rf_assemble_tile(
         COLUMN_INDEX_COLUMN,
         ROW_INDEX_COLUMN,
         TILE_COLUMN,
