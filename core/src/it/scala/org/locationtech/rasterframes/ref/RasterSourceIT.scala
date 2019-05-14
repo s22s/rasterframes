@@ -71,8 +71,13 @@ class RasterSourceIT extends TestEnvironment with TestData {
 
   describe("GDAL support") {
     it("should read JPEG2000 scene") {
-      val src = RasterSource(localSentinel.toURI)
-      src.readAll().flatMap(_.tile.statisticsDouble).size should be (64)
+      if (sys.env.getOrElse("WITH_GDAL", "true").toBoolean) {
+        RasterSource(localSentinel.toURI).readAll().flatMap(_.tile.statisticsDouble).size should be(64)
+      } else {
+        intercept[IllegalArgumentException] {
+          RasterSource(localSentinel.toURI)
+        }
+      }
     }
   }
 }
