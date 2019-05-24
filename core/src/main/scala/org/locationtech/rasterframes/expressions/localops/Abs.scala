@@ -19,40 +19,32 @@
  *
  */
 
-package org.locationtech.rasterframes.expressions.tilestats
+package org.locationtech.rasterframes.expressions.localops
 
-import org.locationtech.rasterframes.expressions.UnaryRasterOp
-import geotrellis.raster._
+import geotrellis.raster.Tile
 import org.apache.spark.sql.catalyst.expressions.{Expression, ExpressionDescription}
 import org.apache.spark.sql.catalyst.expressions.codegen.CodegenFallback
-import org.apache.spark.sql.types.{DataType, DoubleType}
 import org.apache.spark.sql.{Column, TypedColumn}
-import org.locationtech.rasterframes.model.TileContext
+import org.locationtech.rasterframes._
+import org.locationtech.rasterframes.expressions.{NullToValue, UnaryLocalRasterOp}
 
 @ExpressionDescription(
-  usage = "_FUNC_(tile) - Computes the sum of all the cells in a tile.",
+  usage = "_FUNC_(tile) - Compute the absolute value of each cell.",
   arguments = """
   Arguments:
-    * tile - tile to sum up""",
+    * tile - tile column to apply abs""",
   examples = """
   Examples:
-    > SELECT _FUNC_(tile5);
-       2135.34"""
+    > SELECT  _FUNC_(tile);
+       ..."""
 )
-case class Sum(child: Expression) extends UnaryRasterOp with CodegenFallback {
-  override def nodeName: String = "rf_tile_sum"
-  override def dataType: DataType = DoubleType
-  override protected def eval(tile: Tile,  ctx: Option[TileContext]): Any = Sum.op(tile)
+case class Abs(child: Expression) extends UnaryLocalRasterOp with NullToValue with CodegenFallback {
+  override def nodeName: String = "rf_abs"
+  override def na: Any = null
+  override protected def op(child: Tile): Tile = child.localAbs()
 }
 
-object Sum {
-  import org.locationtech.rasterframes.encoders.StandardEncoders.PrimitiveEncoders.doubleEnc
-  def apply(tile: Column): TypedColumn[Any, Double] =
-    new Column(Sum(tile.expr)).as[Double]
-
-  def op = (tile: Tile) => {
-    var sum: Double = 0.0
-    tile.foreachDouble(z ⇒ if(isData(z)) sum = sum + z)
-    sum
-  }
+object Abs {
+  def apply(tile: Column): TypedColumn[Any, Tile] =
+    new Column(Abs(tile.expr)).as[Tile]
 }

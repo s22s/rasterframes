@@ -30,7 +30,7 @@ import org.apache.spark.sql.{Column, TypedColumn}
 import org.locationtech.jts.geom.Geometry
 import org.locationtech.rasterframes.expressions.TileAssembler
 import org.locationtech.rasterframes.expressions.accessors._
-import org.locationtech.rasterframes.expressions.aggstats._
+import org.locationtech.rasterframes.expressions.aggregates._
 import org.locationtech.rasterframes.expressions.generators._
 import org.locationtech.rasterframes.expressions.localops._
 import org.locationtech.rasterframes.expressions.tilestats._
@@ -67,6 +67,9 @@ trait RasterFunctions {
 
   /** Extracts the bounding box from a RasterSource or ProjectedRasterTile */
   def rf_extent(col: Column): TypedColumn[Any, Extent] = GetExtent(col)
+
+  /** Extracts the CRS from a RasterSource or ProjectedRasterTile */
+  def rf_crs(col: Column): TypedColumn[Any, CRS] = GetCRS(col)
 
   /** Flattens Tile into a double array. */
   def rf_tile_to_array_double(col: Column): TypedColumn[Any, Array[Double]] =
@@ -169,8 +172,15 @@ trait RasterFunctions {
   def rf_no_data_cells(tile: Column): TypedColumn[Any, Long] =
     NoDataCells(tile)
 
+  /** Returns true if all cells in the tile are NoData.*/
   def rf_is_no_data_tile(tile: Column): TypedColumn[Any, Boolean] =
     IsNoDataTile(tile)
+
+  /** Returns true if any cells in the tile are true (non-zero and not NoData). */
+  def rf_exists(tile: Column): TypedColumn[Any, Boolean] = Exists(tile)
+
+  /** Returns true if all cells in the tile are true (non-zero and not NoData). */
+  def rf_for_all(tile: Column): TypedColumn[Any, Boolean] = ForAll(tile)
 
   /** Compute cell-local aggregate descriptive statistics for a column of Tiles. */
   def rf_agg_local_stats(col: Column) =
@@ -298,6 +308,14 @@ trait RasterFunctions {
   def st_reproject(sourceGeom: Column, srcCRS: CRS, dstCRS: CRS): TypedColumn[Any, Geometry] =
     ReprojectGeometry(sourceGeom, srcCRS, dstCRS)
 
+  /** Reproject a column of geometry from one CRS to another.
+    * @param sourceGeom Geometry column to reproject
+    * @param srcCRSCol Native CRS of `sourceGeom` as a column
+    * @param dstCRSCol Destination CRS as a column
+    */
+  def st_reproject(sourceGeom: Column, srcCRSCol: Column, dstCRSCol: Column): TypedColumn[Any, Geometry] =
+    ReprojectGeometry(sourceGeom, srcCRSCol, dstCRSCol)
+
   /** Render Tile as ASCII string, for debugging purposes. */
   def rf_render_ascii(col: Column): TypedColumn[Any, String] =
     DebugRender.RenderAscii(col)
@@ -357,6 +375,10 @@ trait RasterFunctions {
   /** Round cell values to nearest integer without chaning cell type. */
   def rf_round(tileCol: Column): TypedColumn[Any, Tile] =
     Round(tileCol)
+
+  /** Compute the absolute value of each cell. */
+  def rf_abs(tileCol: Column): TypedColumn[Any, Tile] =
+    Abs(tileCol)
 
   /** Take natural logarithm of cell values. */
   def rf_log(tileCol: Column): TypedColumn[Any, Tile] =

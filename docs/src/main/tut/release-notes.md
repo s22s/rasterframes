@@ -5,13 +5,14 @@
 ### 0.8.0
 
 * Upgraded to the following core dependencies: Spark 2.3.2, GeoTrellis 2.3.0, GeoMesa 2.2.1, JTS 1.16.0.
-* Added new tile functions `rf_round`, `rf_log`, `rf_log10`, `rf_log2`, `rf_log1p`, `rf_exp`, `rf_exp10`, `rf_exp2`, `rf_expm1`, `rf_resample`.
+* Added new tile functions `rf_round`, `rf_abs`, `rf_log`, `rf_log10`, `rf_log2`, `rf_log1p`, `rf_exp`, `rf_exp10`, `rf_exp2`, `rf_expm1`, `rf_resample`.
 * Support python-side [Shapely](https://pypi.org/project/Shapely/) geometry User-Defined Type.
 * SQL API support for: `rf_assemble_tile`, `rf_array_to_tile`.
 * Introduced at the source level the concept of a `RasterSource` and `RasterRef`, enabling lazy/delayed read of sub-scene tiles.
 * Added `withKryoSerialization` extension methods on `SparkSession.Builder` and `SparkConf`.
 * Added `rf_render_matrix` debugging function.
 * Added `RasterFrame.withExtent` extension method.
+* Added `rf_crs` for `ProjectedRasterTile` columns.
 * Added `st_extent` (for `Geometry` types) and `rf_extent` (for `ProjectedRasterTile` and `RasterSource` columns).
 * Added `st_geometry` (for `Extent` types) and `rf_geometry` (for `ProjectedRasterTile` and `RasterSource` columns).
 * _Breaking_: Root package changed from `org.locationtech.rasterframes` to `org.locationtech.rasterframes`.
@@ -29,6 +30,7 @@
 * Introduced `LocalCellStatistics` class to wrap together results from `LocalStatsAggregate`.
 * _Breaking_: `TileDimensions` moved from `astraea.spark.rasterframes` to `org.locationtech.rasterframes.model`.
 * _Breaking_: Renamed `RasterFrame.withBounds` to `RasterFrame.withGeometry` for consistency with DataSource schemas.
+* Reworked build scripts for RasterFrames Jupyter Notebook. 
    
 ## 0.7.x
 

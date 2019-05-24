@@ -28,8 +28,8 @@ import org.apache.spark.sql.catalyst.{InternalRow, ScalaReflection}
 import org.apache.spark.sql.rf.VersionShims._
 import org.apache.spark.sql.{SQLContext, rf}
 import org.locationtech.rasterframes.expressions.accessors._
-import org.locationtech.rasterframes.expressions.aggstats.CellCountAggregate.DataCells
-import org.locationtech.rasterframes.expressions.aggstats._
+import org.locationtech.rasterframes.expressions.aggregates.CellCountAggregate.DataCells
+import org.locationtech.rasterframes.expressions.aggregates._
 import org.locationtech.rasterframes.expressions.generators._
 import org.locationtech.rasterframes.expressions.localops._
 import org.locationtech.rasterframes.expressions.tilestats._
@@ -73,6 +73,7 @@ package object expressions {
     registry.registerExpression[GetGeometry]("rf_geometry")
     registry.registerExpression[GeometryToExtent]("st_extent")
     registry.registerExpression[GetExtent]("rf_extent")
+    registry.registerExpression[GetCRS]("rf_crs")
     registry.registerExpression[Subtract]("rf_local_subtract")
     registry.registerExpression[Multiply]("rf_local_multiply")
     registry.registerExpression[Divide]("rf_local_divide")
@@ -85,6 +86,7 @@ package object expressions {
     registry.registerExpression[Unequal]("rf_local_unequal")
     registry.registerExpression[Sum]("rf_tile_sum")
     registry.registerExpression[Round]("rf_round")
+    registry.registerExpression[Abs]("rf_abs")
     registry.registerExpression[Log]("rf_log")
     registry.registerExpression[Log10]("rf_log10")
     registry.registerExpression[Log2]("rf_log2")
@@ -99,6 +101,8 @@ package object expressions {
     registry.registerExpression[DataCells]("rf_data_cells")
     registry.registerExpression[NoDataCells]("rf_no_data_cells")
     registry.registerExpression[IsNoDataTile]("rf_is_no_data_tile")
+    registry.registerExpression[Exists]("rf_exists")
+    registry.registerExpression[ForAll]("rf_for_all")
     registry.registerExpression[TileMin]("rf_tile_min")
     registry.registerExpression[TileMax]("rf_tile_max")
     registry.registerExpression[TileMean]("rf_tile_mean")

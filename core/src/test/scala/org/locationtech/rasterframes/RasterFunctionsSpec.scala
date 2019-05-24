@@ -336,6 +336,22 @@ class RasterFunctionsSpec extends FunSpec
       df2.select(rf_is_no_data_tile($"not_nd")).first() should be(false)
       checkDocs("rf_is_no_data_tile")
     }
+
+    it("should evaluate exists and for_all") {
+      val df0 = Seq(zero).toDF("tile")
+      df0.select(rf_exists($"tile")).first() should be(false)
+      df0.select(rf_for_all($"tile")).first() should be(false)
+
+      Seq(one).toDF("tile").select(rf_exists($"tile")).first() should be(true)
+      Seq(one).toDF("tile").select(rf_for_all($"tile")).first() should be(true)
+
+      val dfNd = Seq(TestData.injectND(1)(one)).toDF("tile")
+      dfNd.select(rf_exists($"tile")).first() should be(true)
+      dfNd.select(rf_for_all($"tile")).first() should be(false)
+
+      checkDocs("rf_exists")
+      checkDocs("rf_for_all")
+    }
     it("should find the minimum cell value") {
       val min = randNDTile.toArray().filter(c => raster.isData(c)).min.toDouble
       val df = Seq(randNDTile).toDF("rand")
@@ -601,6 +617,15 @@ class RasterFunctionsSpec extends FunSpec
       assertEqual(df.selectExpr("rf_round(three_less)").as[ProjectedRasterTile].first(), three_double)
 
       checkDocs("rf_round")
+    }
+
+    it("should abs cell values") {
+      val minus = one.mapTile(t => t.convert(IntConstantNoDataCellType) * -1)
+      val df = Seq((minus, one)).toDF("minus", "one")
+
+      assertEqual(df.select(rf_abs($"minus").as[ProjectedRasterTile]).first(), one)
+
+      checkDocs("rf_abs")
     }
 
     it("should take logarithms positive cell values"){
