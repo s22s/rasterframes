@@ -153,16 +153,18 @@ ivyPaths in pysparkCmd := ivyPaths.value.withIvyHome(target.value / "ivy")
 pyTest := {
   val _ = assembly.value
   val s = streams.value
+  val ver = version.value
   s.log.info("Running python tests...")
   val wd = pythonSource.value
-  Process("python setup.py test", wd).!
+  Process("python setup.py test", wd, "RASTERFRAMES_VERSION" -> ver).!
 }
 
 pyTestQuick := {
-    val s = streams.value
+  val s = streams.value
+  val ver = version.value
   s.log.info("Running python tests...")
   val wd = pythonSource.value
-  Process("python setup.py test", wd).!
+  Process("python setup.py test", wd, "RASTERFRAMES_VERSION" -> ver).!
 }
 
 Test / executeTests := {
@@ -216,7 +218,8 @@ Test / executeTests := {
 pyWheel := {
   val s = streams.value
   val wd = pythonSource.value
-  Process("python setup.py bdist_wheel", wd) ! s.log
+  val ver = version.value
+  Process("python setup.py bdist_wheel", wd, "RASTERFRAMES_VERSION" -> ver) ! s.log
   val whl = IO.listFiles(pythonSource.value / "dist", GlobFilter("*.whl"))(0)
   IO.move(whl, (Python / target).value / whl.getName)
 }
@@ -224,6 +227,7 @@ pyWheel := {
 pyExamples := {
   val _ = spPublishLocal.value
   val s = streams.value
+  val ver = version.value
   val wd = pythonSource.value
-  Process("python setup.py examples", wd) ! s.log
+  Process("python setup.py examples", wd, "RASTERFRAMES_VERSION" -> ver) ! s.log
 }

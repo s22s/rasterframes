@@ -2,6 +2,8 @@
 addCommandAlias("makeSite", "docs/makeSite")
 addCommandAlias("console", "datasource/console")
 
+ThisBuild / Test / parallelExecution := false
+
 lazy val root = project
   .in(file("."))
   .withId("RasterFrames")
