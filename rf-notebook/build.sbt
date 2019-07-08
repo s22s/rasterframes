@@ -1,6 +1,5 @@
-import sbt.{IO, _}
-
 import scala.sys.process.Process
+import PythonBuildPlugin.autoImport.pyWhl
 
 Docker / packageName := "rasterframes-notebook"
 
@@ -14,16 +13,21 @@ Docker / target := target.value / "docker"
 
 dockerUpdateLatest := true
 
-Docker / mappings := {
-  val dockerSrc = (Docker / sourceDirectory).value
-  val dockerAssets = (dockerSrc ** "*") pair Path.relativeTo(dockerSrc)
+Docker / mappings := Def.sequential(
+  LocalProject("pyrasterframes") / pyWhl,
+  Def.task  {
+    val dockerSrc = (Docker / sourceDirectory).value
+    val dockerAssets = (dockerSrc ** "*") pair Path.relativeTo(dockerSrc)
 
-  val jar = assembly.value
+    val py = (LocalProject("pyrasterframes") / pyWhl).value
+    val _ = (LocalProject("pyrasterframes") / pySetup).toTask(" notebooks").value
 
-  val py = (LocalProject("pyrasterframes") / Python / packageBin).value
+    val nbFiles = ((LocalProject("pyrasterframes") / Python / doc / target).value ** "*.ipynb").get()
 
-  dockerAssets ++ Seq(jar -> jar.getName, py -> py.getName)
-}
+    val examples = nbFiles.map(f => (f, "examples/" + f.getName))
+    dockerAssets ++ Seq(py -> py.getName) ++ examples
+  }
+).value
 
 // This bypasses the standard DockerPlugin DSL-based Dockerfile construction
 // and just copies the separate, external one.

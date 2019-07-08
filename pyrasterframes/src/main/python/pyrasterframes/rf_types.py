@@ -21,27 +21,28 @@
 """
 This module contains all types relevant to PyRasterFrames. Classes in this module are
 meant to provide smoother pathways between the jvm and Python, and whenever possible,
-the implementations take advantage of the existing Scala functionality. The RasterFrame
+the implementations take advantage of the existing Scala functionality. The RasterFrameLayer
 class here provides the PyRasterFrames entry point.
 """
 
 from pyspark.sql.types import UserDefinedType
 from pyspark import SparkContext
 from pyspark.sql import DataFrame, Column
-from pyspark.sql.types import *
+from pyspark.sql.types import (StructType, StructField, BinaryType, DoubleType, ShortType, IntegerType, StringType)
 from pyspark.ml.wrapper import JavaTransformer
 from pyspark.ml.util import JavaMLReadable, JavaMLWritable
+from pyrasterframes.rf_context import RFContext
 import numpy as np
 
-__all__ = ['RasterFrame', 'Tile', 'TileUDT', 'CellType', 'RasterSourceUDT', 'TileExploder', 'NoDataFilter']
+__all__ = ['RasterFrameLayer', 'Tile', 'TileUDT', 'CellType', 'RasterSourceUDT', 'TileExploder', 'NoDataFilter']
 
 
-class RasterFrame(DataFrame):
+class RasterFrameLayer(DataFrame):
     def __init__(self, jdf, spark_session):
         DataFrame.__init__(self, jdf, spark_session._wrapped)
         self._jrfctx = spark_session.rasterframes._jrfctx
 
-    def tileColumns(self):
+    def tile_columns(self):
         """
         Fetches columns of type Tile.
         :return: One or more Column instances associated with Tiles.
@@ -49,7 +50,7 @@ class RasterFrame(DataFrame):
         cols = self._jrfctx.tileColumns(self._jdf)
         return [Column(c) for c in cols]
 
-    def spatialKeyColumn(self):
+    def spatial_key_column(self):
         """
         Fetch the tagged spatial key column.
         :return: Spatial key column
@@ -57,7 +58,7 @@ class RasterFrame(DataFrame):
         col = self._jrfctx.spatialKeyColumn(self._jdf)
         return Column(col)
 
-    def temporalKeyColumn(self):
+    def temporal_key_column(self):
         """
         Fetch the temporal key column, if any.
         :return: Temporal key column, or None.
@@ -65,7 +66,7 @@ class RasterFrame(DataFrame):
         col = self._jrfctx.temporalKeyColumn(self._jdf)
         return col and Column(col)
 
-    def tileLayerMetadata(self):
+    def tile_layer_metadata(self):
         """
         Fetch the tile layer metadata.
         :return: A dictionary of metadata.
@@ -73,16 +74,16 @@ class RasterFrame(DataFrame):
         import json
         return json.loads(str(self._jrfctx.tileLayerMetadata(self._jdf)))
 
-    def spatialJoin(self, other_df):
+    def spatial_join(self, other_df):
         """
-        Spatially join this RasterFrame to the given RasterFrame.
-        :return: Joined RasterFrame.
+        Spatially join this RasterFrameLayer to the given RasterFrameLayer.
+        :return: Joined RasterFrameLayer.
         """
         ctx = SparkContext._active_spark_context._rf_context
         df = ctx._jrfctx.spatialJoin(self._jdf, other_df._jdf)
-        return RasterFrame(df, ctx._spark_session)
+        return RasterFrameLayer(df, ctx._spark_session)
 
-    def toIntRaster(self, colname, cols, rows):
+    def to_int_raster(self, colname, cols, rows):
         """
         Convert a tile to an Int raster
         :return: array containing values of the tile's cells
@@ -90,7 +91,7 @@ class RasterFrame(DataFrame):
         resArr = self._jrfctx.toIntRaster(self._jdf, colname, cols, rows)
         return resArr
 
-    def toDoubleRaster(self, colname, cols, rows):
+    def to_double_raster(self, colname, cols, rows):
         """
         Convert a tile to an Double raster
         :return: array containing values of the tile's cells
@@ -98,41 +99,41 @@ class RasterFrame(DataFrame):
         resArr = self._jrfctx.toDoubleRaster(self._jdf, colname, cols, rows)
         return resArr
 
-    def withBounds(self):
+    def with_bounds(self):
         """
         Add a column called "bounds" containing the extent of each row.
-        :return: RasterFrame with "bounds" column.
+        :return: RasterFrameLayer with "bounds" column.
         """
         ctx = SparkContext._active_spark_context._rf_context
         df = ctx._jrfctx.withBounds(self._jdf)
-        return RasterFrame(df, ctx._spark_session)
+        return RasterFrameLayer(df, ctx._spark_session)
 
-    def withCenter(self):
+    def with_center(self):
         """
         Add a column called "center" containing the center of the extent of each row.
-        :return: RasterFrame with "center" column.
+        :return: RasterFrameLayer with "center" column.
         """
         ctx = SparkContext._active_spark_context._rf_context
         df = ctx._jrfctx.withCenter(self._jdf)
-        return RasterFrame(df, ctx._spark_session)
+        return RasterFrameLayer(df, ctx._spark_session)
 
-    def withCenterLatLng(self):
+    def with_center_lat_lng(self):
         """
         Add a column called "center" containing the center of the extent of each row in Lat Long form.
-        :return: RasterFrame with "center" column.
+        :return: RasterFrameLayer with "center" column.
         """
         ctx = SparkContext._active_spark_context._rf_context
         df = ctx._jrfctx.withCenterLatLng(self._jdf)
-        return RasterFrame(df, ctx._spark_session)
+        return RasterFrameLayer(df, ctx._spark_session)
 
-    def withSpatialIndex(self):
+    def with_spatial_index(self):
         """
         Add a column containing the spatial index of each row.
-        :return: RasterFrame with "center" column.
+        :return: RasterFrameLayer with "center" column.
         """
         ctx = SparkContext._active_spark_context._rf_context
         df = ctx._jrfctx.withSpatialIndex(self._jdf)
-        return RasterFrame(df, ctx._spark_session)
+        return RasterFrameLayer(df, ctx._spark_session)
 
 
 class RasterSourceUDT(UserDefinedType):
@@ -143,28 +144,30 @@ class RasterSourceUDT(UserDefinedType):
 
     @classmethod
     def module(cls):
-        return 'pyrasterframes.types'
+        return 'pyrasterframes.rf_types'
 
     @classmethod
     def scalaUDT(cls):
         return 'org.apache.spark.sql.rf.RasterSourceUDT'
 
+    def needConversion(self):
+        return False
+
+    # The contents of a RasterSource is opaque in the Python context.
+    # Just pass data through unmodified.
     def serialize(self, obj):
-        # RasterSource is opaque in the Python context.
-        # Any thing passed in by a UDF return value couldn't be validated.
-        # Therefore obj is dropped None is passed to Catalyst.
-        return None
+        return obj
 
     def deserialize(self, datum):
-        bytes(datum[0])
+        return datum
 
 
 class CellType(object):
-    def __init__(self, cell_type_name: str):
+    def __init__(self, cell_type_name):
         self.cell_type_name = cell_type_name
 
     @classmethod
-    def from_numpy_dtype(cls, np_dtype: np.dtype):
+    def from_numpy_dtype(cls, np_dtype):
         return CellType(str(np_dtype.name))
 
     @classmethod
@@ -271,9 +274,16 @@ class CellType(object):
 
 
 class Tile(object):
-    def __init__(self, cells, cell_type):
-        self.cell_type = cell_type
-        self.cells = cells.astype(cell_type.to_numpy_dtype())
+    def __init__(self, cells, cell_type=None):
+        if cell_type is None:
+            # infer cell type from the cells dtype and whether or not it is masked
+            ct = CellType.from_numpy_dtype(cells.dtype)
+            if isinstance(cells, np.ma.MaskedArray):
+                ct = ct.with_no_data_value(cells.fill_value)
+            self.cell_type = ct
+        else:
+            self.cell_type = cell_type
+        self.cells = cells.astype(self.cell_type.to_numpy_dtype())
 
         if self.cell_type.has_no_data():
             nd_value = self.cell_type.no_data_value()
@@ -285,7 +295,7 @@ class Tile(object):
 
     def __eq__(self, other):
         if type(other) is type(self):
-            return self.cell_type == other.cell_type and np.array_equal(self.cells, other.cells)
+            return self.cell_type == other.cell_type and np.ma.allequal(self.cells, other.cells)
         else:
             return False
 
@@ -303,52 +313,48 @@ class Tile(object):
         else:
             other = right
 
-        _sum = np.add(self.cells, other)
-        ct = CellType.from_numpy_dtype(_sum.dtype)
-        if isinstance(_sum, np.ma.MaskedArray):
-            ct = ct.with_no_data_value(_sum.fill_value)
-
-        return Tile(_sum, ct)
+        return Tile(np.add(self.cells, other))
 
     def __sub__(self, right):
         if isinstance(right, Tile):
             other = right.cells
         else:
             other = right
-        _diff = np.subtract(self.cells, other)
-        ct = CellType.from_numpy_dtype(_diff.dtype)
-        if isinstance(_diff, np.ma.MaskedArray):
-            ct = ct.with_no_data_value(_diff.fill_value)
-
-        return Tile(_diff, ct)
+        return Tile(np.subtract(self.cells, other))
 
     def __mul__(self, right):
         if isinstance(right, Tile):
             other = right.cells
         else:
             other = right
-        prod = np.multiply(self.cells, other)
-        ct = CellType.from_numpy_dtype(prod.dtype)
-        if isinstance(prod, np.ma.MaskedArray):
-            ct = ct.with_no_data_value(prod.fill_value)
-
-        return Tile(np.multiply(self.cells, other), self.cell_type)
+        return Tile(np.multiply(self.cells, other))
 
     def __truediv__(self, right):
         if isinstance(right, Tile):
             other = right.cells
         else:
             other = right
-        quot = np.true_divide(self.cells, other)
-        ct = CellType.from_numpy_dtype(quot.dtype)
-        if isinstance(quot, np.ma.MaskedArray):
-            ct = ct.with_no_data_value(quot.fill_value)
-        return Tile(quot, ct)
+        return Tile(np.true_divide(self.cells, other))
 
+    def __div__(self, right):
+        return self.__truediv__(right)
+
+    def __matmul__(self, right):
+        if isinstance(right, Tile):
+            other = right.cells
+        else:
+            other = right
+        return Tile(np.matmul(self.cells, other))
 
     def dimensions(self):
-        # list of cols, rows as is conventional in GeoTrellis and RasterFrames
+        """ Return a list of cols, rows as is conventional in GeoTrellis and RasterFrames."""
         return [self.cells.shape[1], self.cells.shape[0]]
+
+
+    def _repr_png_(self):
+        """Provide default PNG rendering in IPython and Jupyter"""
+        from pyrasterframes.rf_ipython import tile_to_png
+        return tile_to_png(self)
 
 
 class TileUDT(UserDefinedType):
@@ -417,6 +423,16 @@ class TileUDT(UserDefinedType):
         cols = datum.cell_context.dimensions.cols
         rows = datum.cell_context.dimensions.rows
         cell_data_bytes = datum.cell_data.cells
+        if cell_data_bytes is None:
+            if datum.cell_data.ref is None:
+                raise Exception("Invalid Tile structure. Missing cells and reference")
+            else:
+                payload = datum.cell_data.ref
+                cell_data_bytes = RFContext.active()._resolve_raster_ref(payload)
+
+        if cell_data_bytes is None:
+            raise Exception("Unable to fetch cell data from: " + repr(datum))
+
         try:
             as_numpy = np.frombuffer(cell_data_bytes, dtype=cell_type.to_numpy_dtype())
             reshaped = as_numpy.reshape((rows, cols))

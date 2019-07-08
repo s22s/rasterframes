@@ -32,7 +32,6 @@ import geotrellis.raster.io.geotiff.{MultibandGeoTiff, SinglebandGeoTiff}
 import geotrellis.spark._
 import geotrellis.spark.testkit.TileLayerRDDBuilders
 import geotrellis.spark.tiling.LayoutDefinition
-import geotrellis.vector.io.json.JsonFeatureCollection
 import geotrellis.vector.{Extent, ProjectedExtent}
 import org.apache.commons.io.IOUtils
 import org.apache.spark.SparkContext
@@ -128,7 +127,7 @@ trait TestData {
   def rgbCogSample = readMultiband("LC08_RGB_Norfolk_COG.tiff")
 
   def sampleTileLayerRDD(implicit spark: SparkSession): TileLayerRDD[SpatialKey] = {
-    val rf = sampleGeoTiff.projectedRaster.toRF(128, 128)
+    val rf = sampleGeoTiff.projectedRaster.toLayer(128, 128)
     rf.toTileLayerRDD(rf.tileColumns.head).left.get
   }
 

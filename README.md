@@ -4,7 +4,7 @@
 
 _RasterFrames™_ brings the power of Spark DataFrames to geospatial raster data, empowered by the map algebra and tile layer operations of [GeoTrellis](https://geotrellis.io/).
 
-<img src="docs/src/main/tut/RasterFramePipeline.svg" width="600px"/>
+<img src="docs/src/main/paradox/RasterFramePipeline.svg" width="600px"/>
 
 Please see the [Getting Started](http://rasterframes.io/getting-started.html) section of the Users' Manual to start using RasterFrames.
 
@@ -50,7 +50,7 @@ The documentation may be built with
 sbt makeSite
 ```
 
-The `pyrasterframes` build instructions are located [pyrasterframes/python/README.rst](pyrasterframes/python/README.rst)
+The `pyrasterframes` build instructions are located at [pyrasterframes/src/main/python/README.md](pyrasterframes/src/main/python/README.md)
 
 ## Copyright and License
 

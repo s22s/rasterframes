@@ -28,13 +28,12 @@ from pyspark import SparkContext
 from pyspark.sql import SparkSession, DataFrame, DataFrameReader
 from pyspark.sql.column import _to_java_column
 
-# Import RasterFrame types and functions
-from .rf_types import *
-from . import rasterfunctions
-from .context import RFContext
+# Import RasterFrameLayer types and functions
+from .rf_context import RFContext
+from .version import __version__
+from .rf_types import RasterFrameLayer, TileExploder, TileUDT, RasterSourceUDT
 
-
-__all__ = ['RasterFrame', 'TileExploder']
+__all__ = ['RasterFrameLayer', 'TileExploder']
 
 
 def _rf_init(spark_session):
@@ -56,14 +55,21 @@ def _kryo_init(builder):
     return builder
 
 
+def get_spark_session():
+    """ Create a SparkSession with pyrasterframes enabled and configured. """
+    from pyrasterframes.utils import create_rf_spark_session
+
+    return create_rf_spark_session()
+
+
 def _convert_df(df, sp_key=None, metadata=None):
     ctx = SparkContext._active_spark_context._rf_context
 
     if sp_key is None:
-        return RasterFrame(ctx._jrfctx.asRF(df._jdf), ctx._spark_session)
+        return RasterFrameLayer(ctx._jrfctx.asLayer(df._jdf), ctx._spark_session)
     else:
         import json
-        return RasterFrame(ctx._jrfctx.asRF(
+        return RasterFrameLayer(ctx._jrfctx.asLayer(
             df._jdf, _to_java_column(sp_key), json.dumps(metadata)), ctx._spark_session)
 
 
@@ -83,7 +89,7 @@ def _raster_join(df, other, left_extent=None, left_crs=None, right_extent=None, 
     else:
         jdf = ctx._jrfctx.rasterJoin(df._jdf, other._jdf)
 
-    return RasterFrame(jdf, ctx._spark_session)
+    return RasterFrameLayer(jdf, ctx._spark_session)
 
 
 def _layer_reader(df_reader, format_key, path, **options):
@@ -92,18 +98,55 @@ def _layer_reader(df_reader, format_key, path, **options):
     return _convert_df(df)
 
 
-def _rastersource_reader(df_reader, path=None, band_indexes=None, tile_dimensions=(256, 256), **options):
+def _aliased_reader(df_reader, format_key, path, **options):
+    """ Loads the file of the given type at the given path."""
+    return df_reader.format(format_key).load(path, **options)
+
+def _raster_reader(
+        df_reader,
+        path=None,
+        catalog=None,
+        catalog_col_names=None,
+        band_indexes=None,
+        tile_dimensions=(256, 256),
+        lazy_tiles=True,
+        **options):
+
+    def to_csv(comp):
+        if isinstance(comp, str):
+            return comp
+        else:
+            return ','.join(str(v) for v in comp)
+
     if band_indexes is None:
         band_indexes = [0]
 
-    def to_csv(comp): return ','.join(str(v) for v in comp)
-    # If path is list, convert to newline delimited string and pass as "paths" (plural)
     options.update({
         "bandIndexes": to_csv(band_indexes),
-        "tileDimensions": to_csv(tile_dimensions)
+        "tileDimensions": to_csv(tile_dimensions),
+        "lazyTiles": lazy_tiles
     })
+
+    if catalog is not None:
+        if catalog_col_names is None:
+            raise Exception("'catalog_col_names' required when DataFrame 'catalog' specified")
+        if isinstance(catalog, str):
+            options.update({
+                "catalogCSV": catalog,
+                "catalogColumns": to_csv(catalog_col_names)
+            })
+        elif isinstance(catalog, DataFrame):
+            import uuid
+            # Create a random view name
+            tmp_name = str(uuid.uuid4()).replace('-', '')
+            catalog.createOrReplaceTempView(tmp_name)
+            options.update({
+                "catalogTable": tmp_name,
+                "catalogColumns": to_csv(catalog_col_names)
+            })
+
     return df_reader \
-        .format("rastersource") \
+        .format("raster") \
         .load(path, **options)
 
 
@@ -111,14 +154,16 @@ def _rastersource_reader(df_reader, path=None, band_indexes=None, tile_dimension
 SparkSession.withRasterFrames = _rf_init
 SparkSession.Builder.withKryoSerialization = _kryo_init
 
-# Add the 'asRF' method to pyspark DataFrame
-DataFrame.asRF = _convert_df
+# Add the 'asLayer' method to pyspark DataFrame
+DataFrame.as_layer = _convert_df
 
 # Add `raster_join` method to pyspark DataFrame
 DataFrame.raster_join = _raster_join
 
 # Add DataSource convenience methods to the DataFrameReader
-DataFrameReader.rastersource = _rastersource_reader
+DataFrameReader.raster = _raster_reader
+DataFrameReader.geojson = lambda df_reader, path: _aliased_reader(df_reader, "geojson", path)
+
 
 # Legacy readers
 DataFrameReader.geotiff = lambda df_reader, path: _layer_reader(df_reader, "geotiff", path)

@@ -30,6 +30,7 @@ import geotrellis.vector.{Extent, ProjectedExtent}
 import org.apache.spark.sql.functions.col
 import org.locationtech.jts.geom.{Point => jtsPoint, Polygon => jtsPolygon}
 import org.locationtech.rasterframes.encoders.StandardEncoders.PrimitiveEncoders._
+import org.locationtech.rasterframes.tiles.ProjectedRasterTile
 
 /**
  * Constants identifying column in most RasterFrames.
@@ -37,20 +38,20 @@ import org.locationtech.rasterframes.encoders.StandardEncoders.PrimitiveEncoders
  * @since 2/19/18
  */
 trait StandardColumns {
-  /** Default RasterFrame spatial column name. */
+  /** Default RasterFrameLayer spatial column name. */
   val SPATIAL_KEY_COLUMN = col("spatial_key").as[SpatialKey]
 
-  /** Default RasterFrame temporal column name. */
+  /** Default RasterFrameLayer temporal column name. */
   val TEMPORAL_KEY_COLUMN = col("temporal_key").as[TemporalKey]
 
-  /** Default RasterFrame timestamp column name */
+  /** Default RasterFrameLayer timestamp column name */
   val TIMESTAMP_COLUMN = col("timestamp").as[Timestamp]
 
-  /** Default RasterFrame column name for an tile extent as geometry value. */
+  /** Default RasterFrameLayer column name for an tile extent as geometry value. */
   // This is a `def` because `PolygonUDT` needs to be initialized first.
   def GEOMETRY_COLUMN = col("geometry").as[jtsPolygon]
 
-  /** Default RasterFrame column name for the center coordinates of the tile's bounds. */
+  /** Default RasterFrameLayer column name for the center coordinates of the tile's bounds. */
   // This is a `def` because `PointUDT` needs to be initialized first.
   def CENTER_COLUMN = col("center").as[jtsPoint]
 
@@ -63,14 +64,17 @@ trait StandardColumns {
   /** Default CRS column name. */
   def CRS_COLUMN = col("crs").as[CRS]
 
-  /** Default RasterFrame column name for an added spatial index. */
+  /** Default RasterFrameLayer column name for an added spatial index. */
   val SPATIAL_INDEX_COLUMN = col("spatial_index").as[Long]
 
-  /** Default RasterFrame tile column name. */
+  /** Default RasterFrameLayer tile column name. */
   // This is a `def` because `TileUDT` needs to be initialized first.
   def TILE_COLUMN = col("tile").as[Tile]
 
-  /** Default RasterFrame `TileFeature.data` column name. */
+  /** Default column name for a tile with its CRS and Extent. */
+  def PROJECTED_RASTER_COLUMN = col("proj_raster").as[ProjectedRasterTile]
+
+  /** Default RasterFrameLayer `TileFeature.data` column name. */
   val TILE_FEATURE_DATA_COLUMN = col("tile_data")
 
   /** Default GeoTiff tags column. */
