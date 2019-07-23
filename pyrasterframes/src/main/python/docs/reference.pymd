@@ -399,17 +399,7 @@ Performs natural logarithm of cell values plus one. Inverse of @ref:[`rf_expm1`]
 
 ## Tile Statistics
 
-The following functions compute a statistical summary per row of a `tile` column. The statistics are computed across the cells of a single `tile`, within each DataFrame Row.  Consider the following example.
-
-```python
-import pyspark.sql.functions as F
-spark.sql("""
- SELECT 1 as id, rf_make_ones_tile(5, 5, 'float32') as t
- UNION
- SELECT 2 as id, rf_local_multiply(rf_make_ones_tile(5, 5, 'float32'), 3) as t
- """).select(F.col('id'), rf_tile_sum(F.col('t'))).show()
-```
-
+The following functions compute a statistical summary per row of a `tile` column. The statistics are computed across the cells of a single `tile`, within each DataFrame Row.
 
 ### rf_tile_sum
 
