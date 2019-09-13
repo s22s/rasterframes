@@ -1,26 +1,46 @@
-# Release&nbsp;Notes
+# Release Notes
 
 ## 0.8.x
 
+### 0.8.2
+
+* Fixed issue with `RasterSourceDataSource` swallowing exceptions. ([#267](https://github.com/locationtech/rasterframes/issues/267)) 
+* Fixed SparkML memory pressure issue caused by unnecessary reevaluation, overallocation, and primitive boxing. ([#343](https://github.com/locationtech/rasterframes/issues/343)) 
+* Fixed Parquet serialization issue with `RasterRef`s ([#338](https://github.com/locationtech/rasterframes/issues/338))
+* Fixed `TileExploder`, `rf_agg_local_mean` and `TileColumnSupport` to support `proj_raster` struct ([#287](https://github.com/locationtech/rasterframes/issues/287), [#163](https://github.com/locationtech/rasterframes/issues/163), [#333](https://github.com/locationtech/rasterframes/issues/333)).
+* Various documentation improvements.
+* _Breaking_ (potentially): Synchronized parameter naming in Python and Scala for `spark.read.raster` ([#329](https://github.com/locationtech/rasterframes/pull/329)).
+
+
+### 0.8.1
+
+* Added `rf_local_no_data`, `rf_local_data` and `rf_interpret_cell_type_as` raster functions.
+* Added: `rf_rgb_composite` and `rf_render_png`.
+* Added `toMarkdown` and `toHTML` extension methods for `DataFrame`, and registered them with the IPython formatter system when `rf_ipython` is imported.
+* New documentation theme (thanks [@jonas](https://github.com/jonas)!).
+* Fixed: Removed false return type guarantee in cases where an `Expression` accepts either `Tile` or `ProjectedRasterTile` [(#295)](https://github.com/locationtech/rasterframes/issues/295)
+
 ### 0.8.0
 
-* Upgraded to the following core dependencies: Spark 2.3.2, GeoTrellis 2.3.0, GeoMesa 2.2.1, JTS 1.16.0.
+* Super-duper new Python-centric [RasterFrames Users' Manual](https://rasterframes.io/)!
+* Upgraded to the following core dependencies: Spark 2.3.3, GeoTrellis 2.3.0, GeoMesa 2.2.1, JTS 1.16.0.
 * Build `pyrasterframes` binary distribution for pip installation.
 * Added support for rendering RasterFrame types in IPython/Jupyter.
 * Added new tile functions `rf_round`, `rf_abs`, `rf_log`, `rf_log10`, `rf_log2`, `rf_log1p`, `rf_exp`, `rf_exp10`, `rf_exp2`, `rf_expm1`, `rf_resample`.
 * Support Python-side Tile User-Defined Type backed by [numpy](https://www.numpy.org/) `ndarray` or `ma.MaskedArray`.
 * Support Python-side [Shapely](https://pypi.org/project/Shapely/) geometry User-Defined Type.
-* SQL API support for: `rf_assemble_tile`, `rf_array_to_tile`.
+* SQL API support for `rf_assemble_tile` and `rf_array_to_tile`.
 * Introduced at the source level the concept of a `RasterSource` and `RasterRef`, enabling lazy/delayed read of sub-scene tiles.
 * Added `withKryoSerialization` extension methods on `SparkSession.Builder` and `SparkConf`.
 * Added `rf_render_matrix` debugging function.
-* Added `RasterFrame.withExtent` extension method.
+* Added `RasterFrameLayer.withExtent` extension method.
 * Added `SinglebandGeoTiff.toDF` extension method.
 * Added `DataFrame.rasterJoin` extension method for merging two dataframes with tiles in disparate CRSs.
 * Added `rf_crs` for `ProjectedRasterTile` columns.
 * Added `st_extent` (for `Geometry` types) and `rf_extent` (for `ProjectedRasterTile` and `RasterSource` columns).
 * Added `st_geometry` (for `Extent` types) and `rf_geometry` (for `ProjectedRasterTile` and `RasterSource` columns).
-* _Breaking_: The type `RasterFrame` renamed `RasterFrameLayer` to be reflect its purpose.
+* Reworked build scripts for RasterFrames Jupyter Notebook. 
+* _Breaking_: The type `RasterFrame` renamed `RasterFrameLayer` to be reflect its intended purpose.
 * _Breaking_: All `asRF` methods renamed to `asLayer`.
 * _Breaking_: Root package changed from `org.locationtech.rasterframes` to `org.locationtech.rasterframes`.
 * _Breaking_: Removed `envelope`, in lieu of `st_extent`, `rf_extent` or `st_envelope` 
@@ -36,8 +56,11 @@
 * _Breaking_: `CellHistogram` no longer carries along approximate statistics, due to confusing behavior. Use `rf_agg_stats` instead.
 * Introduced `LocalCellStatistics` class to wrap together results from `LocalStatsAggregate`.
 * _Breaking_: `TileDimensions` moved from `astraea.spark.rasterframes` to `org.locationtech.rasterframes.model`.
-* _Breaking_: Renamed `RasterFrame.withBounds` to `RasterFrame.withGeometry` for consistency with DataSource schemas.
-* Reworked build scripts for RasterFrames Jupyter Notebook. 
+* _Breaking_: Renamed `RasterFrame.withBounds` to `RasterFrameLayer.withGeometry` for consistency with DataSource schemas.
+
+#### Known issues
+
+* [#188](https://github.com/locationtech/rasterframes/issues/188): Error on deserialization of a `Tile` with a `bool` cell type to the Python side; see issue description for work around.
    
 ## 0.7.x
 

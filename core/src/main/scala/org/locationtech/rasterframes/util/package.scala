@@ -22,25 +22,24 @@
 package org.locationtech.rasterframes
 
 import com.typesafe.scalalogging.Logger
+import geotrellis.raster.CellGrid
 import geotrellis.raster.crop.TileCropMethods
 import geotrellis.raster.io.geotiff.reader.GeoTiffReader
 import geotrellis.raster.mapalgebra.local.LocalTileBinaryOp
 import geotrellis.raster.mask.TileMaskMethods
 import geotrellis.raster.merge.TileMergeMethods
 import geotrellis.raster.prototype.TilePrototypeMethods
-import geotrellis.raster.{CellGrid, Tile, isNoData}
 import geotrellis.spark.Bounds
 import geotrellis.spark.tiling.TilerKeyMethods
 import geotrellis.util.{ByteReader, GetComponent}
+import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{Alias, Expression, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.rf._
 import org.apache.spark.sql.types.StringType
-import org.apache.spark.sql._
 import org.slf4j.LoggerFactory
-import spire.syntax.cfor._
 
 import scala.Boolean.box
 
@@ -49,7 +48,7 @@ import scala.Boolean.box
  *
  * @since 12/18/17
  */
-package object util {
+package object util extends DataFrameRenderers {
   @transient
   protected lazy val logger: Logger =
     Logger(LoggerFactory.getLogger("org.locationtech.rasterframes"))
@@ -78,7 +77,7 @@ package object util {
   type KeyMethodsProvider[K1, K2] = K1 ⇒ TilerKeyMethods[K1, K2]
 
   /** Internal method for slapping the RasterFrameLayer seal of approval on a DataFrame. */
-  private[rasterframes] def certifyRasterframe(df: DataFrame): RasterFrameLayer =
+  private[rasterframes] def certifyLayer(df: DataFrame): RasterFrameLayer =
     shapeless.tag[RasterFrameTag][DataFrame](df)
 
 
@@ -158,31 +157,6 @@ package object util {
     analyzer(sqlContext).extendedResolutionRules
   }
 
-  implicit class TileAsMatrix(val tile: Tile) extends AnyVal {
-    def renderMatrix(significantDigits: Int): String = {
-      val ND = s"%${significantDigits+5}s".format(Double.NaN)
-      val fmt = s"% ${significantDigits+5}.${significantDigits}g"
-      val buf = new StringBuilder("[")
-      cfor(0)(_ < tile.rows, _ + 1) { row =>
-        if(row > 0) buf.append(' ')
-        buf.append('[')
-        cfor(0)(_ < tile.cols, _ + 1) { col =>
-          val v = tile.getDouble(col, row)
-          if (isNoData(v)) buf.append(ND)
-          else buf.append(fmt.format(v))
-
-          if (col < tile.cols - 1)
-            buf.append(',')
-        }
-        buf.append(']')
-        if (row < tile.rows - 1)
-          buf.append(",\n")
-      }
-      buf.append("]")
-      buf.toString()
-    }
-  }
-
   object Shims {
     // GT 1.2.1 to 2.0.0
     def toArrayTile[T <: CellGrid](tile: T): T =
@@ -225,5 +199,4 @@ package object util {
       result.asInstanceOf[GeoTiffReader.GeoTiffInfo]
     }
   }
-
 }

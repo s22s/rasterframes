@@ -60,6 +60,7 @@ object ProjectedRasterTile {
       extends ProjectedRasterTile {
     def delegate: Tile = t
 
+    // NB: Don't be tempted to move this into the parent trait. Will get stack overflow.
     override def convert(cellType: CellType): Tile =
       ConcreteProjectedRasterTile(t.convert(cellType), extent, crs)
 
@@ -70,7 +71,7 @@ object ProjectedRasterTile {
     }
   }
   implicit val serializer: CatalystSerializer[ProjectedRasterTile] = new CatalystSerializer[ProjectedRasterTile] {
-    override def schema: StructType = StructType(Seq(
+    override val schema: StructType = StructType(Seq(
       StructField("tile_context", schemaOf[TileContext], false),
       StructField("tile", TileType, false))
     )

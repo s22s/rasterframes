@@ -71,7 +71,13 @@ class TestEnvironment(unittest.TestCase):
 
         cls.spark = spark_test_session()
 
-        cls.img_uri = 'file://' + os.path.join(cls.resource_dir, 'L8-B8-Robinson-IL.tiff')
+        cls.img_path = os.path.join(cls.resource_dir, 'L8-B8-Robinson-IL.tiff')
+
+        cls.img_uri = 'file://' + cls.img_path
+
+    @classmethod
+    def l8band_uri(cls, band_index):
+        return 'file://' + os.path.join(cls.resource_dir, 'L8-B{}-Elkton-VA.tiff'.format(band_index))
 
     def create_layer(self):
         from pyrasterframes.rasterfunctions import rf_convert_cell_type
@@ -84,4 +90,3 @@ class TestEnvironment(unittest.TestCase):
         self.rf = rf.withColumn('tile2', rf_convert_cell_type('tile', 'float32')) \
             .drop('tile') \
             .withColumnRenamed('tile2', 'tile').as_layer()
-        # cls.rf.show()

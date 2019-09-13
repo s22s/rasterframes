@@ -23,7 +23,6 @@ package org.locationtech.rasterframes.ref
 
 import java.net.URI
 
-import com.azavea.gdal.GDALWarp
 import com.github.blemale.scaffeine.Scaffeine
 import com.typesafe.scalalogging.LazyLogging
 import geotrellis.proj4.CRS
@@ -34,7 +33,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.spark.annotation.Experimental
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.rf.RasterSourceUDT
-import org.locationtech.rasterframes.model.{TileContext, TileDimensions}
+import org.locationtech.rasterframes.model.{FixedRasterExtent, TileContext, TileDimensions}
 import org.locationtech.rasterframes.{NOMINAL_TILE_DIMS, rfConfig}
 
 import scala.concurrent.duration.Duration
@@ -69,7 +68,7 @@ trait RasterSource extends ProjectedRasterLike with Serializable {
 
   protected def readBounds(bounds: Traversable[GridBounds], bands: Seq[Int]): Iterator[Raster[MultibandTile]]
 
-  def rasterExtent = RasterExtent(extent, cols, rows)
+  def rasterExtent = FixedRasterExtent(extent, cols, rows)
 
   def cellSize = CellSize(extent, cols, rows)
 
@@ -79,7 +78,7 @@ trait RasterSource extends ProjectedRasterLike with Serializable {
 
   def layoutExtents(dims: TileDimensions): Seq[Extent] = {
     val re = rasterExtent
-    layoutBounds(dims).map(re.rasterExtentFor).map(_.extent)
+    layoutBounds(dims).map(re.extentFor(_, clamp = true))
   }
 
   def layoutBounds(dims: TileDimensions): Seq[GridBounds] = {
@@ -120,32 +119,28 @@ object RasterSource extends LazyLogging {
 
     /** Determine if we should prefer GDAL for all types. */
     private val preferGdal: Boolean = org.locationtech.rasterframes.rfConfig.getBoolean("prefer-gdal")
-    @transient
-    lazy val hasGDAL: Boolean = try {
-      val _ = new GDALWarp()
-      true
-    } catch {
-      case _: UnsatisfiedLinkError =>
-        logger.warn("GDAL native bindings are not available. Falling back to JVM-based reader.")
-        false
-    }
 
-    val gdalOnlyExtensions = Seq(".jp2", ".mrf", ".hdf")
+    val gdalOnlyExtensions = Seq(".jp2", ".mrf", ".hdf", ".vrt")
 
     def gdalOnly(source: URI): Boolean =
       if (gdalOnlyExtensions.exists(source.getPath.toLowerCase.endsWith)) {
-        require(hasGDAL, s"Can only read $source if GDAL is available")
+        require(GDALRasterSource.hasGDAL, s"Can only read $source if GDAL is available")
         true
       } else false
 
     /** Extractor for determining if a scheme indicates GDAL preference.  */
-    def unapply(source: URI): Boolean =
-      gdalOnly(source) || ((preferGdal || source.getScheme.startsWith("gdal+")) && hasGDAL)
+    def unapply(source: URI): Boolean = {
+      lazy val schemeIsGdal = Option(source.getScheme())
+        .exists(_.startsWith("gdal"))
+
+      gdalOnly(source) || ((preferGdal || schemeIsGdal) && GDALRasterSource.hasGDAL)
+    }
   }
 
   object IsDefaultGeoTiff {
     def unapply(source: URI): Boolean = source.getScheme match {
       case "file" | "http" | "https" | "s3" => true
+      case null | ""                        ⇒ true
       case _                                => false
     }
   }

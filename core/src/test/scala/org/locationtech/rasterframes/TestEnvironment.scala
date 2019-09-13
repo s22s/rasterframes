@@ -40,12 +40,12 @@ trait TestEnvironment extends FunSpec with GeoTrellisTestEnvironment
   override def sparkMaster: String = "local[*]"
 
   override implicit def sc: SparkContext = { _sc.setLogLevel("ERROR"); _sc }
-  //p.setProperty(“spark.driver.allowMultipleContexts”, “true”)
 
   lazy val sqlContext: SQLContext = {
     val session = SparkSession.builder
       .config(_sc.getConf)
       .config("spark.sql.crossJoin.enabled", true)
+      .withKryoSerialization
       .getOrCreate()
     session.sqlContext.withRasterFrames
   }
@@ -62,9 +62,11 @@ trait TestEnvironment extends FunSpec with GeoTrellisTestEnvironment
     val dest = Files.createTempFile(Paths.get(outputLocalPath), "rf", ".parquet")
     logger.trace(s"Writing '${sanitized.columns.mkString(", ")}' to '$dest'...")
     sanitized.write.mode(SaveMode.Overwrite).parquet(dest.toString)
-    val rows = df.sparkSession.read.parquet(dest.toString).count()
-    logger.trace(s" read back $rows row(s)")
-    rows == inRows
+    val in = df.sparkSession.read.parquet(dest.toString)
+    // NB: The `collect` ensures values get fully reified.
+    val rows = in.collect()
+    logger.trace(s" read back ${rows.length} row(s)")
+    rows.length == inRows
   }
 
   /**

@@ -25,7 +25,10 @@ import geotrellis.proj4.LatLng
 import geotrellis.raster.{ByteCellType, GridBounds, TileLayout}
 import geotrellis.spark.tiling.{CRSWorldExtent, LayoutDefinition}
 import geotrellis.spark.{KeyBounds, SpatialKey, TileLayerMetadata}
-import org.locationtech.rasterframes.util.SubdivideSupport
+import org.apache.spark.sql.Encoders
+import org.locationtech.rasterframes.util._
+
+import scala.xml.parsing.XhtmlParser
 
 /**
  * Tests miscellaneous extension methods.
@@ -55,14 +58,28 @@ class ExtensionMethodSpec extends TestEnvironment with TestData with SubdivideSu
     }
   }
   describe("Miscellaneous extensions") {
+    import spark.implicits._
+
+    it("should find multiple extent columns") {
+      val df = Seq((extent, "fred", extent, 34.0)).toDF("e1", "s", "e2", "n")
+      df.extentColumns.size should be(2)
+    }
+
+    it("should find multiple crs columns") {
+      // Not sure why implicit resolution isn't handling this properly.
+      implicit val enc = Encoders.tuple(crsEncoder, Encoders.STRING, crsEncoder, Encoders.scalaDouble)
+      val df = Seq((pe.crs, "fred", pe.crs, 34.0)).toDF("c1", "s", "c2", "n")
+      df.crsColumns.size should be(2)
+    }
+
     it("should split TileLayout") {
       val tl1 = TileLayout(2, 3, 10, 10)
       assert(tl1.subdivide(0) === tl1)
       assert(tl1.subdivide(1) === tl1)
       assert(tl1.subdivide(2) === TileLayout(4, 6, 5, 5))
       assertThrows[IllegalArgumentException](tl1.subdivide(-1))
-
     }
+
     it("should split KeyBounds[SpatialKey]") {
       val grid = GridBounds(0, 0, 9, 9)
       val kb = KeyBounds(grid)
@@ -77,10 +94,10 @@ class ExtensionMethodSpec extends TestEnvironment with TestData with SubdivideSu
 
     it("should split key") {
       val s1 = SpatialKey(0, 0).subdivide(2)
-      assert(s1 === Seq(SpatialKey(0,0), SpatialKey(1,0), SpatialKey(0,1), SpatialKey(1,1)))
+      assert(s1 === Seq(SpatialKey(0, 0), SpatialKey(1, 0), SpatialKey(0, 1), SpatialKey(1, 1)))
 
       val s2 = SpatialKey(2, 3).subdivide(3)
-      assert(s2 === Seq(SpatialKey(6,9), SpatialKey(7,9), SpatialKey(8,9), SpatialKey(6,10), SpatialKey(7,10), SpatialKey(8,10), SpatialKey(6,11), SpatialKey(7,11), SpatialKey(8,11)))
+      assert(s2 === Seq(SpatialKey(6, 9), SpatialKey(7, 9), SpatialKey(8, 9), SpatialKey(6, 10), SpatialKey(7, 10), SpatialKey(8, 10), SpatialKey(6, 11), SpatialKey(7, 11), SpatialKey(8, 11)))
     }
 
     it("should split TileLayerMetadata[SpatialKey]") {
@@ -92,7 +109,32 @@ class ExtensionMethodSpec extends TestEnvironment with TestData with SubdivideSu
 
       val divided = tlm.subdivide(2)
 
-      assert(divided.tileLayout.tileDimensions === (tileSize/2, tileSize/2))
+      assert(divided.tileLayout.tileDimensions === (tileSize / 2, tileSize / 2))
+    }
+
+    it("should render Markdown") {
+      import org.apache.spark.sql.functions.lit
+
+      val md = rf.toMarkdown()
+      md.count(_ == '|') shouldBe >=(3 * 5)
+      md.count(_ == '\n') should be >= 6
+
+      val md2 = rf.withColumn("long_string", lit("p" * 42)).toMarkdown(truncate=true, renderTiles = false)
+      md2 should include ("...")
+
+      val md3 = rf.toMarkdown(truncate=true, renderTiles = false)
+      md3 shouldNot include("<img")
+    }
+
+    it("should render HTML") {
+      val html = rf.toHTML(renderTiles = false)
+      noException shouldBe thrownBy {
+        XhtmlParser(scala.io.Source.fromString(html))
+      }
+      val html2 = rf.toHTML(renderTiles = true)
+      noException shouldBe thrownBy {
+        XhtmlParser(scala.io.Source.fromString(html2))
+      }
     }
   }
 }

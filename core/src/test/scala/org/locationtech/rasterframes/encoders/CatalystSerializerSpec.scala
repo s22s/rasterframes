@@ -35,7 +35,9 @@ import org.locationtech.rasterframes.model.{CellContext, TileContext, TileDataCo
 import org.locationtech.rasterframes.ref.{RasterRef, RasterSource}
 import org.scalatest.Assertion
 
-class CatalystSerializerSpec extends TestEnvironment with TestData {
+class CatalystSerializerSpec extends TestEnvironment {
+  import TestData._
+
   val dc = TileDataContext(UShortUserDefinedNoDataCellType(3), TileDimensions(12, 23))
   val tc = TileContext(Extent(1, 2, 3, 4), WebMercator)
   val cc = CellContext(tc, dc, 34, 45)
@@ -105,7 +107,8 @@ class CatalystSerializerSpec extends TestEnvironment with TestData {
     it("should serialize RasterRef") {
       // TODO: Decide if RasterRef should be encoded 'flat', non-'flat', or depends
       val src = RasterSource(remoteCOGSingleband1)
-      val value = RasterRef(src, 0, Some(src.extent.buffer(-3.0)))
+      val ext = src.extent.buffer(-3.0)
+      val value = RasterRef(src, 0, Some(ext), Some(src.rasterExtent.gridBoundsFor(ext)))
       assertConsistent(value)
       assertInvertable(value)
     }

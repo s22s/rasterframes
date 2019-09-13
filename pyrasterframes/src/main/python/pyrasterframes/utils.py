@@ -22,8 +22,9 @@ import glob
 from pyspark.sql import SparkSession
 import os
 import sys
+from . import RFContext
 
-__all__ = ["create_rf_spark_session", "find_pyrasterframes_jar_dir", "find_pyrasterframes_assembly"]
+__all__ = ["create_rf_spark_session", "find_pyrasterframes_jar_dir", "find_pyrasterframes_assembly", "gdal_version"]
 
 
 def find_pyrasterframes_jar_dir():
@@ -71,17 +72,17 @@ def find_pyrasterframes_assembly():
     if not len(jarpath) == 1:
         raise RuntimeError("""
 Expected to find exactly one assembly. Found '{}' instead. 
-Try running 'sbt pyrasterframes/package' first. """.format(jarpath))
+Try running 'sbt pyrasterframes/clean pyrasterframes/package' first. """.format(jarpath))
     return jarpath[0]
 
 
-def create_rf_spark_session():
+def create_rf_spark_session(master="local[*]"):
     """ Create a SparkSession with pyrasterframes enabled and configured. """
     jar_path = find_pyrasterframes_assembly()
 
     spark = (SparkSession.builder
-             .master("local[*]")
-             .appName("PyRasterFrames")
+             .master(master)
+             .appName("RasterFrames")
              .config('spark.jars', jar_path)
              .withKryoSerialization()
              .getOrCreate())
@@ -92,3 +93,8 @@ def create_rf_spark_session():
     except TypeError as te:
         print("Error setting up SparkSession; cannot find the pyrasterframes assembly jar\n", te)
         return None
+
+
+def gdal_version():
+    fcn = RFContext.active().lookup("buildInfo")
+    return fcn()["GDAL"]

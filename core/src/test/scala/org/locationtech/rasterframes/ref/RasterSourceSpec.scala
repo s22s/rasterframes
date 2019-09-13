@@ -21,17 +21,14 @@
 
 package org.locationtech.rasterframes.ref
 
-import org.locationtech.rasterframes.TestData
+import java.net.URI
+
+import org.locationtech.rasterframes._
 import geotrellis.vector.Extent
 import org.apache.spark.sql.rf.RasterSourceUDT
-import org.locationtech.rasterframes.TestEnvironment
-import org.locationtech.rasterframes.model.TileDimensions
+import org.locationtech.rasterframes.model.{FixedRasterExtent, TileDimensions}
 
-/**
- *
- *
- * @since 8/22/18
- */
+
 class RasterSourceSpec extends TestEnvironment with TestData {
   def sub(e: Extent) = {
     val c = e.center
@@ -59,7 +56,35 @@ class RasterSourceSpec extends TestEnvironment with TestData {
       val dims = TileDimensions(63, 63)
       val ext = rs.layoutExtents(dims).head
       val bounds = rs.layoutBounds(dims).head
-      rs.rasterExtent.gridBoundsFor(ext, false) should be (bounds)
+      rs.rasterExtent.gridBoundsFor(ext) should be (bounds)
+    }
+    it("should compute layout extents from scene with fractional gsd") {
+
+      val rs = RasterSource(remoteMODIS)
+
+      val dims = rs.layoutExtents(NOMINAL_TILE_DIMS)
+        .map(e => rs.rasterExtent.gridBoundsFor(e, false))
+        .map(b => (b.width, b.height))
+        .distinct
+      forEvery(dims) { d =>
+        d._1 should be <= NOMINAL_TILE_SIZE
+        d._2 should be <= NOMINAL_TILE_SIZE
+      }
+
+      val re = FixedRasterExtent(
+        Extent(1.4455356755667E7, -3335851.5589995002, 1.55673072753335E7, -2223901.039333),
+        2400, 2400
+      )
+
+      val divisions = re.gridBounds
+        .split(256, 256)
+        .map { gb => gb -> re.rasterExtentFor(gb) }
+        .map { case (originalGB, t) => (originalGB, t.extent)  }
+        .map { case (originalGB, e) => (originalGB, re.gridBoundsFor(e, clamp = false)) }
+        .map { case (ogb, gb) => ((ogb.width, ogb.height), (gb.width, gb.height)) }
+        .toSeq
+        .distinct
+        divisions.length should be(4)
     }
   }
 
@@ -82,9 +107,7 @@ class RasterSourceSpec extends TestEnvironment with TestData {
       }
       withClue("remoteCOGMultiband") {
         val src = RasterSource(remoteCOGMultiband)
-        //println("CoG size", src.size, src.dimensions)
         val raster = src.read(sub(src.extent))
-        //println("Subtile size", raster.size, raster.dimensions)
         assert(raster.size > 0 && raster.size < src.size)
       }
     }
@@ -108,9 +131,16 @@ class RasterSourceSpec extends TestEnvironment with TestData {
       val src = RasterSource(localSrc)
       assert(!src.extent.isEmpty)
     }
+    it("should interpret no scheme as file://"){
+      val localSrc = geotiffDir.resolve("LC08_B7_Memphis_COG.tiff").toString
+      val schemelessUri = new URI(localSrc)
+      schemelessUri.getScheme should be (null)
+      val src = RasterSource(schemelessUri)
+      assert(!src.extent.isEmpty)
+    }
   }
 
-  if(RasterSource.IsGDAL.hasGDAL) {
+  if(GDALRasterSource.hasGDAL) {
     describe("GDAL Rastersource") {
       val gdal = GDALRasterSource(cogPath)
       val jvm = JVMGeoTiffRasterSource(cogPath)
@@ -125,10 +155,28 @@ class RasterSourceSpec extends TestEnvironment with TestData {
         gdal.layoutBounds(dims) should contain allElementsOf jvm.layoutBounds(dims)
         gdal.layoutExtents(dims) should contain allElementsOf jvm.layoutExtents(dims)
       }
+
+
+      it("should support vsi file paths") {
+        val archivePath = geotiffDir.resolve("L8-archive.zip")
+        val archiveURI = URI.create("gdal://vsizip/" + archivePath.toString + "/L8-RGB-VA.tiff")
+        val gdal = GDALRasterSource(archiveURI)
+
+        gdal.bandCount should be (3)
+      }
+
+      it("should interpret no scheme as file://") {
+        val localSrc = geotiffDir.resolve("LC08_B7_Memphis_COG.tiff").toString
+        val schemelessUri = new URI(localSrc)
+        val gdal = GDALRasterSource(schemelessUri)
+        val jvm = JVMGeoTiffRasterSource(schemelessUri)
+        gdal.extent should be (jvm.extent)
+        gdal.cellSize should be(jvm.cellSize)
+      }
     }
   }
 
-  describe("RasterSourceToTiles Expression") {
+  describe("RasterSource tile construction") {
     it("should read all tiles") {
       val src = RasterSource(remoteMODIS)
 
@@ -144,11 +192,6 @@ class RasterSourceSpec extends TestEnvironment with TestData {
       val totalCells = subrasters.map(_.size).sum
 
       assert(totalCells === src.size)
-
-//      subrasters.zipWithIndex.foreach{case (r, i) ⇒
-//        // TODO: how to test?
-//        GeoTiff(r, src.crs).write(s"target/$i.tiff")
-//      }
     }
   }
 }

@@ -21,52 +21,23 @@
 
 package org.locationtech.rasterframes
 
-import geotrellis.proj4.LatLng
+import java.io.ByteArrayInputStream
+
 import geotrellis.raster
-import geotrellis.raster.testkit.RasterMatchers
 import geotrellis.raster._
-import geotrellis.vector.Extent
+import geotrellis.raster.render.ColorRamps
+import geotrellis.raster.testkit.RasterMatchers
+import javax.imageio.ImageIO
 import org.apache.spark.sql.Encoders
 import org.apache.spark.sql.functions._
 import org.locationtech.rasterframes.expressions.accessors.ExtractTile
 import org.locationtech.rasterframes.model.TileDimensions
-import org.locationtech.rasterframes.ref.{RasterRef, RasterSource}
 import org.locationtech.rasterframes.stats._
 import org.locationtech.rasterframes.tiles.ProjectedRasterTile
-import org.scalatest.{FunSpec, Matchers}
 
-class RasterFunctionsSpec extends FunSpec
-  with TestEnvironment with Matchers with RasterMatchers {
+class RasterFunctionsSpec extends TestEnvironment with RasterMatchers {
+  import TestData._
   import spark.implicits._
-
-  val extent = Extent(10, 20, 30, 40)
-  val crs = LatLng
-  val ct = ByteUserDefinedNoDataCellType(-2)
-  val cols = 10
-  val rows = cols
-  val tileSize = cols * rows
-  val tileCount = 10
-  val numND = 4
-  lazy val zero = TestData.projectedRasterTile(cols, rows, 0, extent, crs, ct)
-  lazy val one = TestData.projectedRasterTile(cols, rows, 1, extent, crs, ct)
-  lazy val two = TestData.projectedRasterTile(cols, rows, 2, extent, crs, ct)
-  lazy val three = TestData.projectedRasterTile(cols, rows, 3, extent, crs, ct)
-  lazy val six = ProjectedRasterTile(three * two, three.extent, three.crs)
-  lazy val nd = TestData.projectedRasterTile(cols, rows, -2, extent, crs, ct)
-  lazy val randPRT = TestData.projectedRasterTile(cols, rows, scala.util.Random.nextInt(), extent, crs, ct)
-  lazy val randNDPRT  = TestData.injectND(numND)(randPRT)
-
-  lazy val randDoubleTile = TestData.projectedRasterTile(cols, rows, scala.util.Random.nextGaussian(), extent, crs, DoubleConstantNoDataCellType)
-  lazy val randDoubleNDTile  = TestData.injectND(numND)(randDoubleTile)
-  lazy val randPositiveDoubleTile = TestData.projectedRasterTile(cols, rows, scala.util.Random.nextDouble() + 1e-6, extent, crs, DoubleConstantNoDataCellType)
-
-  val expectedRandNoData: Long = numND * tileCount.toLong
-  val expectedRandData: Long = cols * rows * tileCount - expectedRandNoData
-  lazy val randNDTilesWithNull = Seq.fill[Tile](tileCount)(TestData.injectND(numND)(
-    TestData.randomTile(cols, rows, UByteConstantNoDataCellType)
-  )).map(ProjectedRasterTile(_, extent, crs)) :+ null
-
-  def lazyPRT = RasterRef(RasterSource(TestData.l8samplePath), 0, None).tile
 
   implicit val pairEnc = Encoders.tuple(ProjectedRasterTile.prtEncoder, ProjectedRasterTile.prtEncoder)
   implicit val tripEnc = Encoders.tuple(ProjectedRasterTile.prtEncoder, ProjectedRasterTile.prtEncoder, ProjectedRasterTile.prtEncoder)
@@ -95,6 +66,47 @@ class RasterFunctionsSpec extends FunSpec
         .withColumn("const", rf_make_constant_tile(value, dim, dim, ByteConstantNoDataCellType))
       val result = df.select(rf_tile_sum($"const") as "ts").agg(sum("ts")).as[Double].first()
       result should be (dim * dim * rows * value)
+    }
+  }
+
+  describe("cell type operations") {
+    it("should convert cell type") {
+      val df = Seq((TestData.injectND(7)(three), TestData.injectND(12)(two))).toDF("three", "two")
+
+      val ct = df.select(
+        rf_convert_cell_type($"three", "uint16ud512") as "three",
+        rf_convert_cell_type($"two", "float32") as "two"
+      )
+
+      val (ct3, ct2) = ct.as[(Tile, Tile)].first()
+
+      ct3.cellType should be (UShortUserDefinedNoDataCellType(512))
+      ct2.cellType should be (FloatConstantNoDataCellType)
+
+      val (cnt3, cnt2) = ct.select(rf_no_data_cells($"three"), rf_no_data_cells($"two")).as[(Long, Long)].first()
+
+      cnt3 should be (7)
+      cnt2 should be (12)
+
+      checkDocs("rf_convert_cell_type")
+    }
+    it("should change NoData value") {
+      val df = Seq((TestData.injectND(7)(three), TestData.injectND(12)(two))).toDF("three", "two")
+
+      val ndCT = df.select(
+        rf_with_no_data($"three", 3) as "three",
+        rf_with_no_data($"two", 2.0) as "two"
+      )
+
+      val (cnt3, cnt2) = ndCT.select(rf_no_data_cells($"three"), rf_no_data_cells($"two")).as[(Long, Long)].first()
+
+      cnt3 should be ((cols * rows) - 7)
+      cnt2 should be ((cols * rows) - 12)
+
+      checkDocs("rf_with_no_data")
+
+      // Should maintain original cell type.
+      ndCT.select(rf_cell_type($"two")).first().withDefaultNoData() should be(ct.withDefaultNoData())
     }
   }
 
@@ -338,6 +350,24 @@ class RasterFunctionsSpec extends FunSpec
 
       checkDocs("rf_no_data_cells")
     }
+
+    it("should properly count data and nodata cells on constant tiles") {
+      val rf = Seq(randPRT).toDF("tile")
+
+      val df = rf
+        .withColumn("make", rf_make_constant_tile(99, 3, 4, ByteConstantNoDataCellType))
+        .withColumn("make2", rf_with_no_data($"make", 99))
+
+      val counts = df.select(
+        rf_no_data_cells($"make").alias("nodata1"),
+        rf_data_cells($"make").alias("data1"),
+        rf_no_data_cells($"make2").alias("nodata2"),
+        rf_data_cells($"make2").alias("data2")
+      ).as[(Long, Long, Long, Long)].first()
+
+      counts should be ((0l, 12l, 12l, 0l))
+    }
+
     it("should detect no-data tiles") {
       val df = Seq(nd).toDF("nd")
       df.select(rf_is_no_data_tile($"nd")).first() should be(true)
@@ -495,6 +525,22 @@ class RasterFunctionsSpec extends FunSpec
       checkDocs("rf_agg_local_max")
     }
 
+    it("should compute local mean") {
+      checkDocs("rf_agg_local_mean")
+      val df = Seq(two, three, one, six).toDF("tile")
+          .withColumn("id", monotonically_increasing_id())
+
+      df.select(rf_agg_local_mean($"tile")).first() should be(three.toArrayTile())
+
+      df.selectExpr("rf_agg_local_mean(tile)").as[Tile].first() should be(three.toArrayTile())
+
+      noException should be thrownBy {
+        df.groupBy($"id")
+          .agg(rf_agg_local_mean($"tile"))
+          .collect()
+      }
+    }
+
     it("should compute local data cell counts") {
       val df = Seq(two, randNDPRT, nd).toDF("tile")
       val t1 = df.select(rf_agg_local_data_cells($"tile")).first()
@@ -508,9 +554,51 @@ class RasterFunctionsSpec extends FunSpec
       val t1 = df.select(rf_agg_local_no_data_cells($"tile")).first()
       val t2 = df.selectExpr("rf_agg_local_no_data_cells(tile) as cnt").select($"cnt".as[Tile]).first()
       t1 should be (t2)
-      val t3 = df.select(rf_local_add(rf_agg_local_data_cells($"tile"), rf_agg_local_no_data_cells($"tile"))).first()
+      val t3 = df.select(rf_local_add(rf_agg_local_data_cells($"tile"), rf_agg_local_no_data_cells($"tile"))).as[Tile].first()
       t3 should be(three.toArrayTile())
       checkDocs("rf_agg_local_no_data_cells")
+    }
+  }
+
+  describe("array operations") {
+    it("should convert tile into array") {
+      val query = sql(
+        """select rf_tile_to_array_int(
+          |  rf_make_constant_tile(1, 10, 10, 'int8raw')
+          |) as intArray
+          |""".stripMargin)
+      query.as[Array[Int]].first.sum should be (100)
+
+      val tile = FloatConstantTile(1.1f, 10, 10, FloatCellType)
+      val df = Seq[Tile](tile).toDF("tile")
+      val arrayDF = df.select(rf_tile_to_array_double($"tile").as[Array[Double]])
+      arrayDF.first().sum should be (110.0 +- 0.0001)
+
+      checkDocs("rf_tile_to_array_int")
+      checkDocs("rf_tile_to_array_double")
+    }
+
+    it("should convert an array into a tile") {
+      val tile = TestData.randomTile(10, 10, FloatCellType)
+      val df = Seq[Tile](tile, null).toDF("tile")
+      val arrayDF = df.withColumn("tileArray", rf_tile_to_array_double($"tile"))
+
+      val back = arrayDF.withColumn("backToTile", rf_array_to_tile($"tileArray", 10, 10))
+
+      val result = back.select($"backToTile".as[Tile]).first
+
+      assert(result.toArrayDouble() === tile.toArrayDouble())
+
+      // Same round trip, but with SQL expression for rf_array_to_tile
+      val resultSql = arrayDF.selectExpr("rf_array_to_tile(tileArray, 10, 10) as backToTile").as[Tile].first
+
+      assert(resultSql.toArrayDouble() === tile.toArrayDouble())
+
+      val hasNoData = back.withColumn("withNoData", rf_with_no_data($"backToTile", 0))
+
+      val result2 = hasNoData.select($"withNoData".as[Tile]).first
+
+      assert(result2.cellType.asInstanceOf[UserDefinedNoData[_]].noDataValue === 0)
     }
   }
 
@@ -793,5 +881,90 @@ class RasterFunctionsSpec extends FunSpec
     assertEqual(df3.selectExpr("rf_resample(tile, factor)").as[ProjectedRasterTile].first(), lowRes)
 
     checkDocs("rf_resample")
+  }
+
+  it("should create RGB composite") {
+    val red = TestData.l8Sample(4).toProjectedRasterTile
+    val green = TestData.l8Sample(3).toProjectedRasterTile
+    val blue = TestData.l8Sample(2).toProjectedRasterTile
+
+    val expected = ArrayMultibandTile(
+      red.rescale(0, 255),
+      green.rescale(0, 255),
+      blue.rescale(0, 255)
+    ).color()
+
+    val df = Seq((red, green, blue)).toDF("red", "green", "blue")
+
+    val expr = df.select(rf_rgb_composite($"red", $"green", $"blue")).as[ProjectedRasterTile]
+
+    val nat_color = expr.first()
+
+    checkDocs("rf_rgb_composite")
+    assertEqual(nat_color.toArrayTile(), expected)
+  }
+
+  it("should create an RGB PNG image") {
+    val red = TestData.l8Sample(4).toProjectedRasterTile
+    val green = TestData.l8Sample(3).toProjectedRasterTile
+    val blue = TestData.l8Sample(2).toProjectedRasterTile
+
+    val df = Seq((red, green, blue)).toDF("red", "green", "blue")
+
+    val expr = df.select(rf_render_png($"red", $"green", $"blue"))
+
+    val pngData = expr.first()
+
+    val image = ImageIO.read(new ByteArrayInputStream(pngData))
+    image.getWidth should be(red.cols)
+    image.getHeight should be(red.rows)
+  }
+
+  it("should create a color-ramp PNG image") {
+    val red = TestData.l8Sample(4).toProjectedRasterTile
+
+    val df = Seq(red).toDF("red")
+
+    val expr = df.select(rf_render_png($"red", ColorRamps.HeatmapBlueToYellowToRedSpectrum))
+
+    val pngData = expr.first()
+
+    val image = ImageIO.read(new ByteArrayInputStream(pngData))
+    image.getWidth should be(red.cols)
+    image.getHeight should be(red.rows)
+  }
+  it("should interpret cell values with a specified cell type") {
+    checkDocs("rf_interpret_cell_type_as")
+    val df = Seq(randNDPRT).toDF("t")
+      .withColumn("tile", rf_interpret_cell_type_as($"t", "int8raw"))
+    val resultTile = df.select("tile").as[Tile].first()
+
+    resultTile.cellType should be (CellType.fromName("int8raw"))
+    // should have same number of values that are -2 the old ND
+    val countOldNd = df.select(
+      rf_tile_sum(rf_local_equal($"tile", ct.noDataValue)),
+      rf_no_data_cells($"t")
+    ).first()
+    countOldNd._1 should be (countOldNd._2)
+
+    // should not have no data any more (raw type)
+    val countNewNd = df.select(rf_no_data_cells($"tile")).first()
+    countNewNd should be (0L)
+
+  }
+
+  it("should return local data and nodata"){
+    checkDocs("rf_local_data")
+    checkDocs("rf_local_no_data")
+
+    val df = Seq(randNDPRT).toDF("t")
+      .withColumn("ld", rf_local_data($"t"))
+      .withColumn("lnd", rf_local_no_data($"t"))
+
+    val ndResult = df.select($"lnd").as[Tile].first()
+    ndResult should be (randNDPRT.localUndefined())
+
+    val dResult = df.select($"ld").as[Tile].first()
+    dResult should be (randNDPRT.localDefined())
   }
 }

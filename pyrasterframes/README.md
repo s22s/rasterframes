@@ -62,7 +62,7 @@ To manually initialize PyRasterFrames in a `pyspark` shell, prepare to call pysp
    
 ```
 
-Then in the pyspark shell or app, import the module and call `withRasterFrames` on the SparkSession.
+Then in the PySpark shell or script, import the module and call `withRasterFrames` on the SparkSession.
 
 ```python
 from pyrasterframes.utils import create_rf_spark_session
@@ -133,9 +133,9 @@ sbt pyrasterframes/package # alias 'pyBuild'
 
 Observe the output messages such as:
 
-    [info] Python .whl file written to '/Users/monty/rasterframes/pyrasterframes/target/python/dist/pyrasterframes-0.8.0.dev0-py2.py3-none-any.whl'
+    [info] Python .whl file written to '/Users/monty/rasterframes/pyrasterframes/target/python/dist/pyrasterframes-${VERSION}-py2.py3-none-any.whl'
     
-This wheel is suitable for publishing to a package index. See [https://packaging.python.org/tutorials/packaging-projects/#uploading-the-distribution-archives](packaging.python.org).
+This wheel is suitable for publishing to a package index. See [packaging.python.org](https://packaging.python.org/tutorials/packaging-projects/#uploading-the-distribution-archives).
 
 ## Build Internals
 
@@ -153,7 +153,13 @@ sbt 'pySetup test --addopts "-k test_tile_creation"'
 Or to build a specific document:
 
 ```bash
-sbt 'pySetup pweave -f docs/raster-io.pymd'
+sbt 'pySetup pweave -s docs/raster-io.pymd'
 ```
 
-*Note: You may need to run `sbt pyrasterframes/package` at least once for certain `pySetup` commands to work.*
+Or to build a specific document with desired output format:
+
+```bash
+sbt 'pySetup pweave -f notebook -s docs/numpy-pandas.pymd'
+```
+
+*Note: You may need to run `sbt pyrasterframes/package` and/or `sbt pyTest` at least once for certain `pySetup` commands to work.*

@@ -21,7 +21,7 @@
 
 package org.locationtech.rasterframes.datasource.raster
 import geotrellis.raster.Tile
-import org.apache.spark.sql.functions.{lit, udf}
+import org.apache.spark.sql.functions.{lit, udf, round}
 import org.locationtech.rasterframes.{TestEnvironment, _}
 import org.locationtech.rasterframes.datasource.raster.RasterSourceDataSource.{RasterSourceCatalog, _}
 import org.locationtech.rasterframes.model.TileDimensions
@@ -243,6 +243,87 @@ class RasterSourceDataSourceSpec extends TestEnvironment with TestData {
 
       df2.select(is_lazy($"proj_raster.tile").as[Boolean]).first() should be (false)
 
+    }
+  }
+
+  describe("RasterSource breaks up scenes into tiles") {
+    val modis_df = spark.read.raster
+      .withTileDimensions(256, 256)
+      .withLazyTiles(true)
+      .load(remoteMODIS.toASCIIString)
+
+    val l8_df = spark.read.raster
+      .withTileDimensions(32, 33)
+      .withLazyTiles(true)
+      .load(remoteL8.toASCIIString)
+
+    it("should have at most four tile dimensions reading MODIS") {
+      val dims = modis_df.select(rf_dimensions($"proj_raster")).distinct().collect()
+      dims.length should be > 0
+      dims.length should be <= 4
+    }
+
+    it("should have at most four tile dimensions reading landsat") {
+      val dims = l8_df.select(rf_dimensions($"proj_raster")).distinct().collect()
+      dims.length should be > 0
+      dims.length should be <= 4
+    }
+
+    it("should read the correct size") {
+      val cat = Seq((
+        l8SamplePath(4).toASCIIString,
+        l8SamplePath(3).toASCIIString,
+        l8SamplePath(2).toASCIIString
+      )).toDF("red", "green", "blue")
+
+      val df = spark.read.raster
+        .withTileDimensions(256, 256)
+        .fromCatalog(cat, "red", "green", "blue").load()
+      val dims = df.select(rf_dimensions($"red")).first()
+
+      dims should be (TileDimensions(l8Sample(1).tile.dimensions))
+    }
+
+    it("should provide MODIS tiles with requested size") {
+      val res = modis_df
+        .withColumn("dims", rf_dimensions($"proj_raster"))
+        .select($"dims".as[TileDimensions]).distinct().collect()
+
+      forEvery(res) { r =>
+        r.cols should be <= 256
+        r.rows should be <= 256
+      }
+    }
+
+    it("should provide Landsat tiles with requested size") {
+      val dims = l8_df
+        .withColumn("dims", rf_dimensions($"proj_raster"))
+        .select($"dims".as[TileDimensions]).distinct().collect()
+
+      forEvery(dims) { d =>
+        d.cols should be <= 32
+        d.rows should be <= 33
+      }
+    }
+
+    it("should have consistent tile resolution reading MODIS") {
+      val res = modis_df
+        .withColumn("ext", rf_extent($"proj_raster"))
+        .withColumn("dims", rf_dimensions($"proj_raster"))
+        .select(round(($"ext.xmax" - $"ext.xmin") / $"dims.cols", 5))
+        .distinct().collect()
+      withClue(res.mkString("(", ", ", ")")) {
+        res.length should be(1)
+      }
+    }
+
+    it("should have consistent tile resolution reading Landsat") {
+      val res = l8_df
+        .withColumn("ext", rf_extent($"proj_raster"))
+        .withColumn("dims", rf_dimensions($"proj_raster"))
+        .select(($"ext.xmax" - $"ext.xmin") / $"dims.cols")
+        .distinct().collect()
+      res.length should be (1)
     }
   }
 }

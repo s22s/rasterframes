@@ -77,7 +77,7 @@ object PythonBuildPlugin extends AutoPlugin {
     val pyDest = (packageBin / artifactPath).value
     val whl = pyWhl.value
     IO.copyFile(whl, pyDest)
-    log.info(s"Maven Python .zip artifact written to '$pyDest'")
+    log.info(s"Maven Python artifact written to '$pyDest'")
     pyDest
   }.dependsOn(pyWhl)
 
@@ -93,7 +93,10 @@ object PythonBuildPlugin extends AutoPlugin {
       val cmd = Seq(pythonCommand.value, "setup.py") ++ args
       val ver = version.value
       s.log.info(s"Running '${cmd.mkString(" ")}' in '$wd'")
-      Process(cmd, wd, "RASTERFRAMES_VERSION" -> ver).!
+      val ec = Process(cmd, wd, "RASTERFRAMES_VERSION" -> ver).!
+      if (ec != 0)
+        throw new MessageOnlyException(s"'${cmd.mkString(" ")}' exited with value '$ec'")
+      ec
     },
     pyWhl := pyWhlImp.value,
     Compile / `package` := (Compile / `package`).dependsOn(Python / packageBin).value,
@@ -130,7 +133,7 @@ object PythonBuildPlugin extends AutoPlugin {
         val dest = (Compile / packageBin / artifactPath).value.getParentFile
         val art = (Python / packageBin / artifact).value
         val ver = version.value
-        dest / s"${art.name}-python-$ver.zip"
+        dest / s"${art.name}-$ver-py2.py3-none-any.whl"
       },
       testQuick := pySetup.toTask(" test").value,
       executeTests := Def.task {
@@ -171,7 +174,7 @@ object PythonBuildPlugin extends AutoPlugin {
           )
         }
         result
-        Tests.Output(result.result, Map("PyRasterFramesTests" -> result), Iterable(pySummary))
+        Tests.Output(result.result, Map("Python Tests" -> result), Iterable(pySummary))
       }.dependsOn(assembly).value
     )) ++
     addArtifact(Python / packageBin / artifact, Python / packageBin)

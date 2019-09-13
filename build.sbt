@@ -21,6 +21,7 @@
 
 addCommandAlias("makeSite", "docs/makeSite")
 addCommandAlias("previewSite", "docs/previewSite")
+addCommandAlias("ghpagesPushSite", "docs/ghpagesPushSite")
 addCommandAlias("console", "datasource/console")
 
 // Prefer our own IntegrationTest config definition, which inherits from Test.
@@ -36,6 +37,7 @@ lazy val root = project
 lazy val `rf-notebook` = project
   .dependsOn(pyrasterframes)
   .enablePlugins(RFAssemblyPlugin, DockerPlugin)
+  .settings(publish / skip := true)
 
 lazy val core = project
   .enablePlugins(BuildInfoPlugin)
@@ -127,7 +129,7 @@ lazy val experimental = project
 
 lazy val docs = project
   .dependsOn(core, datasource, pyrasterframes)
-  .enablePlugins(SiteScaladocPlugin, ParadoxPlugin, GhpagesPlugin, ScalaUnidocPlugin)
+  .enablePlugins(SiteScaladocPlugin, ParadoxPlugin, ParadoxMaterialThemePlugin, GhpagesPlugin, ScalaUnidocPlugin)
   .settings(
     apiURL := Some(url("http://rasterframes.io/latest/api")),
     autoAPIMappings := true,
@@ -135,14 +137,26 @@ lazy val docs = project
     ScalaUnidoc / siteSubdirName := "latest/api",
     paradox / siteSubdirName := ".",
     paradoxProperties ++= Map(
-      "github.base_url" -> "https://github.com/locationtech/rasterframes",
       "version" -> version.value,
-      "scaladoc.org.apache.spark.sql.rf" -> "http://rasterframes.io/latest"
+      "scaladoc.org.apache.spark.sql.rf" -> "http://rasterframes.io/latest",
+      "github.base_url" -> ""
     ),
-    paradoxTheme := Some(builtinParadoxTheme("generic")),
-    makeSite := makeSite.dependsOn(Compile / unidoc).dependsOn(Compile / paradox).value,
+    paradoxNavigationExpandDepth := Some(3),
+    Compile / paradoxMaterialTheme ~= { _
+      .withRepository(uri("https://github.com/locationtech/rasterframes"))
+      .withCustomStylesheet("assets/custom.css")
+      .withCopyright("""&copy; 2017-2019 <a href="https://astraea.earth">Astraea</a>, Inc. All rights reserved.""")
+      .withLogo("assets/images/RF-R.svg")
+      .withFavicon("assets/images/RasterFrames_32x32.ico")
+      .withColor("blue-grey", "light-blue")
+      .withGoogleAnalytics("UA-106630615-1")
+    },
+    makeSite := makeSite
+      .dependsOn(Compile / unidoc)
+      .dependsOn((Compile / paradox)
+        .dependsOn(pyrasterframes / doc)
+      ).value,
     Compile / paradox / sourceDirectories += (pyrasterframes / Python / doc / target).value,
-    Compile / paradox := (Compile / paradox).dependsOn(pyrasterframes / doc).value
   )
   .settings(
     addMappingsToSiteDir(ScalaUnidoc / packageDoc / mappings, ScalaUnidoc / siteSubdirName)
@@ -150,6 +164,8 @@ lazy val docs = project
   .settings(
     addMappingsToSiteDir(Compile / paradox / mappings, paradox / siteSubdirName)
   )
+
+//ParadoxMaterialThemePlugin.paradoxMaterialThemeSettings(Paradox)
 
 lazy val bench = project
   .dependsOn(core % "compile->test")

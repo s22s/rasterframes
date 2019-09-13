@@ -25,13 +25,16 @@ the implementations take advantage of the existing Scala functionality. The Rast
 class here provides the PyRasterFrames entry point.
 """
 
-from pyspark.sql.types import UserDefinedType
 from pyspark import SparkContext
 from pyspark.sql import DataFrame, Column
-from pyspark.sql.types import (StructType, StructField, BinaryType, DoubleType, ShortType, IntegerType, StringType)
+from pyspark.sql.types import (UserDefinedType, StructType, StructField, BinaryType, DoubleType, ShortType, IntegerType, StringType)
+
+from pyspark.ml.param.shared import HasInputCols
 from pyspark.ml.wrapper import JavaTransformer
 from pyspark.ml.util import JavaMLReadable, JavaMLWritable
+
 from pyrasterframes.rf_context import RFContext
+
 import numpy as np
 
 __all__ = ['RasterFrameLayer', 'Tile', 'TileUDT', 'CellType', 'RasterSourceUDT', 'TileExploder', 'NoDataFilter']
@@ -258,7 +261,11 @@ class CellType(object):
     def with_no_data_value(self, no_data):
         if self.has_no_data() and self.no_data_value() == no_data:
             return self
-        return CellType(self.base_cell_type_name() + 'ud' + str(no_data))
+        if self.is_floating_point():
+            no_data = str(float(no_data))
+        else:
+            no_data = str(int(no_data))
+        return CellType(self.base_cell_type_name() + 'ud' + no_data)
 
     def __eq__(self, other):
         if type(other) is type(self):
@@ -295,12 +302,13 @@ class Tile(object):
 
     def __eq__(self, other):
         if type(other) is type(self):
-            return self.cell_type == other.cell_type and np.ma.allequal(self.cells, other.cells)
+            return self.cell_type == other.cell_type and \
+                   np.ma.allequal(self.cells, other.cells, fill_value=True)
         else:
             return False
 
     def __str__(self):
-        return "Tile(dimensions={}, cell_type={}, cells={})" \
+        return "Tile(dimensions={}, cell_type={}, cells=\n{})" \
             .format(self.dimensions(), self.cell_type, self.cells)
 
     def __repr__(self):
@@ -349,12 +357,6 @@ class Tile(object):
     def dimensions(self):
         """ Return a list of cols, rows as is conventional in GeoTrellis and RasterFrames."""
         return [self.cells.shape[1], self.cells.shape[0]]
-
-
-    def _repr_png_(self):
-        """Provide default PNG rendering in IPython and Jupyter"""
-        from pyrasterframes.rf_ipython import tile_to_png
-        return tile_to_png(self)
 
 
 class TileUDT(UserDefinedType):
@@ -464,7 +466,7 @@ class TileExploder(JavaTransformer, JavaMLReadable, JavaMLWritable):
         self._java_obj = self._new_java_obj("org.locationtech.rasterframes.ml.TileExploder", self.uid)
 
 
-class NoDataFilter(JavaTransformer, JavaMLReadable, JavaMLWritable):
+class NoDataFilter(JavaTransformer, HasInputCols, JavaMLReadable, JavaMLWritable):
     """
     Python wrapper for NoDataFilter.scala
     """
@@ -473,5 +475,3 @@ class NoDataFilter(JavaTransformer, JavaMLReadable, JavaMLWritable):
         super(NoDataFilter, self).__init__()
         self._java_obj = self._new_java_obj("org.locationtech.rasterframes.ml.NoDataFilter", self.uid)
 
-    def setInputCols(self, values):
-        self._java_obj.setInputCols(values)

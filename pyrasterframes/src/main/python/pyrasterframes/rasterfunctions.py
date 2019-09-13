@@ -36,9 +36,16 @@ def _context_call(name, *args):
     return f(*args)
 
 
-def _parse_cell_type(cell_type_str):
-    """ Convert the string cell type to the expected CellType object."""
-    return _context_call('_parse_cell_type', cell_type_str)
+def _parse_cell_type(cell_type_arg):
+    """ Convert the cell type representation to the expected JVM CellType object."""
+
+    def to_jvm(ct):
+        return _context_call('_parse_cell_type', ct)
+
+    if isinstance(cell_type_arg, str):
+        return to_jvm(cell_type_arg)
+    elif isinstance(cell_type_arg, CellType):
+        return to_jvm(cell_type_arg.cell_type_name)
 
 
 def rf_cell_types():
@@ -46,13 +53,27 @@ def rf_cell_types():
     return [CellType(str(ct)) for ct in _context_call('rf_cell_types')]
 
 
-def rf_assemble_tile(col_index, row_index, cell_data_col, num_cols, num_rows, cell_type_str):
+def rf_assemble_tile(col_index, row_index, cell_data_col, num_cols, num_rows, cell_type=None):
     """Create a Tile from  a column of cell data with location indices"""
     jfcn = RFContext.active().lookup('rf_assemble_tile')
-    return Column(
-        jfcn(_to_java_column(col_index), _to_java_column(row_index), _to_java_column(cell_data_col), num_cols, num_rows,
-             _parse_cell_type(cell_type_str)))
 
+    if isinstance(num_cols, Column):
+        num_cols = _to_java_column(num_cols)
+
+    if isinstance(num_rows, Column):
+        num_rows = _to_java_column(num_rows)
+
+    if cell_type is None:
+        return Column(jfcn(
+            _to_java_column(col_index), _to_java_column(row_index), _to_java_column(cell_data_col),
+            num_cols, num_rows
+        ))
+
+    else:
+        return Column(jfcn(
+            _to_java_column(col_index), _to_java_column(row_index), _to_java_column(cell_data_col),
+            num_cols, num_rows, _parse_cell_type(cell_type)
+        ))
 
 def rf_array_to_tile(array_col, num_cols, num_rows):
     """Convert array in `array_col` into a Tile of dimensions `num_cols` and `num_rows'"""
@@ -65,44 +86,47 @@ def rf_convert_cell_type(tile_col, cell_type):
     jfcn = RFContext.active().lookup('rf_convert_cell_type')
     return Column(jfcn(_to_java_column(tile_col), _parse_cell_type(cell_type)))
 
+def rf_interpret_cell_type_as(tile_col, cell_type):
+    """Change the interpretation of the tile_col's cell values according to specified cell_type"""
+    jfcn = RFContext.active().lookup('rf_interpret_cell_type_as')
+    return Column(jfcn(_to_java_column(tile_col), _parse_cell_type(cell_type)))
 
-def rf_make_constant_tile(value, cols, rows, cell_type):
+
+def rf_make_constant_tile(scalar_value, num_cols, num_rows, cell_type=CellType.float64()):
     """Constructor for constant tile column"""
     jfcn = RFContext.active().lookup('rf_make_constant_tile')
-    return Column(jfcn(value, cols, rows, cell_type))
+    return Column(jfcn(scalar_value, num_cols, num_rows, _parse_cell_type(cell_type)))
 
 
-def rf_make_zeros_tile(cols, rows, cell_type='float64'):
+def rf_make_zeros_tile(num_cols, num_rows, cell_type=CellType.float64()):
     """Create column of constant tiles of zero"""
     jfcn = RFContext.active().lookup('rf_make_zeros_tile')
-    return Column(jfcn(cols, rows, cell_type))
+    return Column(jfcn(num_cols, num_rows, _parse_cell_type(cell_type)))
 
 
-def rf_make_ones_tile(cols, rows, cell_type='float64'):
+def rf_make_ones_tile(num_cols, num_rows, cell_type=CellType.float64()):
     """Create column of constant tiles of one"""
     jfcn = RFContext.active().lookup('rf_make_ones_tile')
-    return Column(jfcn(cols, rows, cell_type))
+    return Column(jfcn(num_cols, num_rows, _parse_cell_type(cell_type)))
 
 
-def rf_rasterize(geometry_col, bounds_col, value_col, num_cols, num_rows):
+def rf_rasterize(geometry_col, bounds_col, value_col, num_cols_col, num_rows_col):
     """Create a tile where cells in the grid defined by cols, rows, and bounds are filled with the given value."""
     jfcn = RFContext.active().lookup('rf_rasterize')
-    return Column(jfcn(_to_java_column(geometry_col), _to_java_column(bounds_col), _to_java_column(value_col), num_cols,
-                       num_rows))
+    return Column(jfcn(_to_java_column(geometry_col), _to_java_column(bounds_col),
+                       _to_java_column(value_col), _to_java_column(num_cols_col),  _to_java_column(num_rows_col)))
 
 
-def st_reproject(geometry_col, src_crs_name, dst_crs_name):
-    """Reproject a column of geometry given the CRS names of the source and destination.
-    Currently supported registries are EPSG, ESRI, WORLD, NAD83, & NAD27.
-    An example of a valid CRS name is EPSG:3005."""
+def st_reproject(geometry_col, src_crs, dst_crs):
+    """Reproject a column of geometry given the CRSs of the source and destination."""
     jfcn = RFContext.active().lookup('st_reproject')
-    return Column(jfcn(_to_java_column(geometry_col), src_crs_name, dst_crs_name))
+    return Column(jfcn(_to_java_column(geometry_col), _to_java_column(src_crs), _to_java_column(dst_crs)))
 
 
-def rf_explode_tiles(*args):
+def rf_explode_tiles(*tile_cols):
     """Create a row for each cell in Tile."""
     jfcn = RFContext.active().lookup('rf_explode_tiles')
-    jcols = [_to_java_column(arg) for arg in args]
+    jcols = [_to_java_column(arg) for arg in tile_cols]
     return Column(jfcn(RFContext.active().list_to_seq(jcols)))
 
 
@@ -236,6 +260,13 @@ def rf_local_unequal_int(tile_col, scalar):
     """Return a Tile with values equal 1 if the cell is not equal to a scalar, otherwise 0"""
     return _apply_scalar_to_tile('rf_local_unequal_int', tile_col, scalar)
 
+def rf_local_no_data(tile_col):
+    """Return a tile with ones where the input is NoData, otherwise zero."""
+    return _apply_column_function('rf_local_no_data', tile_col)
+
+def rf_local_data(tile_col):
+    """Return a tile with zeros where the input is NoData, otherwise one."""
+    return _apply_column_function('rf_local_data', tile_col)
 
 def _apply_column_function(name, *args):
     jfcn = RFContext.active().lookup(name)
@@ -243,300 +274,318 @@ def _apply_column_function(name, *args):
     return Column(jfcn(*jcols))
 
 
-def rf_dimensions(*args):
+def rf_dimensions(tile_col):
     """Query the number of (cols, rows) in a Tile."""
-    return _apply_column_function('rf_dimensions', *args)
+    return _apply_column_function('rf_dimensions', tile_col)
 
 
-def rf_tile_to_array_int(*args):
+def rf_tile_to_array_int(tile_col):
     """Flattens Tile into an array of integers."""
-    return _apply_column_function('rf_tile_to_array_int', *args)
+    return _apply_column_function('rf_tile_to_array_int', tile_col)
 
 
-def rf_tile_to_array_double(*args):
+def rf_tile_to_array_double(tile_col):
     """Flattens Tile into an array of doubles."""
-    return _apply_column_function('rf_tile_to_array_double', *args)
+    return _apply_column_function('rf_tile_to_array_double', tile_col)
 
 
-def rf_cell_type(*args):
+def rf_cell_type(tile_col):
     """Extract the Tile's cell type"""
-    return _apply_column_function('rf_cell_type', *args)
+    return _apply_column_function('rf_cell_type', tile_col)
 
 
-def rf_is_no_data_tile(*args):
+def rf_is_no_data_tile(tile_col):
     """Report if the Tile is entirely NODDATA cells"""
-    return _apply_column_function('rf_is_no_data_tile', *args)
+    return _apply_column_function('rf_is_no_data_tile', tile_col)
 
 
-def rf_exists(*args):
+def rf_exists(tile_col):
     """Returns true if any cells in the tile are true (non-zero and not NoData)"""
-    return _apply_column_function('rf_exists', *args)
+    return _apply_column_function('rf_exists', tile_col)
 
 
-def rf_for_all(*args):
+def rf_for_all(tile_col):
     """Returns true if all cells in the tile are true (non-zero and not NoData)."""
-    return _apply_column_function('rf_for_all', *args)
+    return _apply_column_function('rf_for_all', tile_col)
 
 
-def rf_agg_approx_histogram(*args):
+def rf_agg_approx_histogram(tile_col):
     """Compute the full column aggregate floating point histogram"""
-    return _apply_column_function('rf_agg_approx_histogram', *args)
+    return _apply_column_function('rf_agg_approx_histogram', tile_col)
 
 
-def rf_agg_stats(*args):
+def rf_agg_stats(tile_col):
     """Compute the full column aggregate floating point statistics"""
-    return _apply_column_function('rf_agg_stats', *args)
+    return _apply_column_function('rf_agg_stats', tile_col)
 
 
-def rf_agg_mean(*args):
+def rf_agg_mean(tile_col):
     """Computes the column aggregate mean"""
-    return _apply_column_function('rf_agg_mean', *args)
+    return _apply_column_function('rf_agg_mean', tile_col)
 
 
-def rf_agg_data_cells(*args):
+def rf_agg_data_cells(tile_col):
     """Computes the number of non-NoData cells in a column"""
-    return _apply_column_function('rf_agg_data_cells', *args)
+    return _apply_column_function('rf_agg_data_cells', tile_col)
 
 
-def rf_agg_no_data_cells(*args):
+def rf_agg_no_data_cells(tile_col):
     """Computes the number of NoData cells in a column"""
-    return _apply_column_function('rf_agg_no_data_cells', *args)
+    return _apply_column_function('rf_agg_no_data_cells', tile_col)
 
 
-def rf_tile_histogram(*args):
+def rf_tile_histogram(tile_col):
     """Compute the Tile-wise histogram"""
-    return _apply_column_function('rf_tile_histogram', *args)
+    return _apply_column_function('rf_tile_histogram', tile_col)
 
 
-def rf_tile_mean(*args):
+def rf_tile_mean(tile_col):
     """Compute the Tile-wise mean"""
-    return _apply_column_function('rf_tile_mean', *args)
+    return _apply_column_function('rf_tile_mean', tile_col)
 
 
-def rf_tile_sum(*args):
+def rf_tile_sum(tile_col):
     """Compute the Tile-wise sum"""
-    return _apply_column_function('rf_tile_sum', *args)
+    return _apply_column_function('rf_tile_sum', tile_col)
 
 
-def rf_tile_min(*args):
+def rf_tile_min(tile_col):
     """Compute the Tile-wise minimum"""
-    return _apply_column_function('rf_tile_min', *args)
+    return _apply_column_function('rf_tile_min', tile_col)
 
 
-def rf_tile_max(*args):
+def rf_tile_max(tile_col):
     """Compute the Tile-wise maximum"""
-    return _apply_column_function('rf_tile_max', *args)
+    return _apply_column_function('rf_tile_max', tile_col)
 
 
-def rf_tile_stats(*args):
+def rf_tile_stats(tile_col):
     """Compute the Tile-wise floating point statistics"""
-    return _apply_column_function('rf_tile_stats', *args)
+    return _apply_column_function('rf_tile_stats', tile_col)
 
 
-def rf_render_ascii(*args):
+def rf_render_ascii(tile_col):
     """Render ASCII art of tile"""
-    return _apply_column_function('rf_render_ascii', *args)
+    return _apply_column_function('rf_render_ascii', tile_col)
 
 
-def rf_render_matrix(*args):
+def rf_render_matrix(tile_col):
     """Render Tile cell values as numeric values, for debugging purposes"""
-    return _apply_column_function('rf_render_matrix', *args)
+    return _apply_column_function('rf_render_matrix', tile_col)
 
 
-def rf_no_data_cells(*args):
+def rf_render_png(red_tile_col, green_tile_col, blue_tile_col):
+    """Converts columns of tiles representing RGB channels into a PNG encoded byte array."""
+    return _apply_column_function('rf_render_png', red_tile_col, green_tile_col, blue_tile_col)
+
+
+def rf_rgb_composite(red_tile_col, green_tile_col, blue_tile_col):
+    """Converts columns of tiles representing RGB channels into a single RGB packaged tile."""
+    return _apply_column_function('rf_rgb_composite', red_tile_col, green_tile_col, blue_tile_col)
+
+
+def rf_no_data_cells(tile_col):
     """Count of NODATA cells"""
-    return _apply_column_function('rf_no_data_cells', *args)
+    return _apply_column_function('rf_no_data_cells', tile_col)
 
 
-def rf_data_cells(*args):
+def rf_data_cells(tile_col):
     """Count of cells with valid data"""
-    return _apply_column_function('rf_data_cells', *args)
+    return _apply_column_function('rf_data_cells', tile_col)
 
 
-def rf_local_add(*args):
+def rf_local_add(left_tile_col, right_tile_col):
     """Add two Tiles"""
-    return _apply_column_function('rf_local_add', *args)
+    return _apply_column_function('rf_local_add', left_tile_col, right_tile_col)
 
 
-def rf_local_subtract(*args):
+def rf_local_subtract(left_tile_col, right_tile_col):
     """Subtract two Tiles"""
-    return _apply_column_function('rf_local_subtract', *args)
+    return _apply_column_function('rf_local_subtract', left_tile_col, right_tile_col)
 
 
-def rf_local_multiply(*args):
+def rf_local_multiply(left_tile_col, right_tile_col):
     """Multiply two Tiles"""
-    return _apply_column_function('rf_local_multiply', *args)
+    return _apply_column_function('rf_local_multiply', left_tile_col, right_tile_col)
 
 
-def rf_local_divide(*args):
+def rf_local_divide(left_tile_col, right_tile_col):
     """Divide two Tiles"""
-    return _apply_column_function('rf_local_divide', *args)
+    return _apply_column_function('rf_local_divide', left_tile_col, right_tile_col)
 
 
-def rf_normalized_difference(*args):
+def rf_normalized_difference(left_tile_col, right_tile_col):
     """Compute the normalized difference of two tiles"""
-    return _apply_column_function('rf_normalized_difference', *args)
+    return _apply_column_function('rf_normalized_difference', left_tile_col, right_tile_col)
 
 
-def rf_agg_local_max(*args):
+def rf_agg_local_max(tile_col):
     """Compute the cell-wise/local max operation between Tiles in a column."""
-    return _apply_column_function('rf_agg_local_max', *args)
+    return _apply_column_function('rf_agg_local_max', tile_col)
 
 
-def rf_agg_local_min(*args):
+def rf_agg_local_min(tile_col):
     """Compute the cellwise/local min operation between Tiles in a column."""
-    return _apply_column_function('rf_agg_local_min', *args)
+    return _apply_column_function('rf_agg_local_min', tile_col)
 
 
-def rf_agg_local_mean(*args):
+def rf_agg_local_mean(tile_col):
     """Compute the cellwise/local mean operation between Tiles in a column."""
-    return _apply_column_function('rf_agg_local_mean', *args)
+    return _apply_column_function('rf_agg_local_mean', tile_col)
 
 
-def rf_agg_local_data_cells(*args):
+def rf_agg_local_data_cells(tile_col):
     """Compute the cellwise/local count of non-NoData cells for all Tiles in a column."""
-    return _apply_column_function('rf_agg_local_data_cells', *args)
+    return _apply_column_function('rf_agg_local_data_cells', tile_col)
 
 
-def rf_agg_local_no_data_cells(*args):
+def rf_agg_local_no_data_cells(tile_col):
     """Compute the cellwise/local count of NoData cells for all Tiles in a column."""
-    return _apply_column_function('rf_agg_local_no_data_cells', *args)
+    return _apply_column_function('rf_agg_local_no_data_cells', tile_col)
 
 
-def rf_agg_local_stats(*args):
+def rf_agg_local_stats(tile_col):
     """Compute cell-local aggregate descriptive statistics for a column of Tiles."""
-    return _apply_column_function('rf_agg_local_stats', *args)
+    return _apply_column_function('rf_agg_local_stats', tile_col)
 
 
-def rf_mask(*args):
+def rf_mask(src_tile_col, mask_tile_col):
     """Where the rf_mask (second) tile contains NODATA, replace values in the source (first) tile with NODATA."""
-    return _apply_column_function('rf_mask', *args)
+    return _apply_column_function('rf_mask', src_tile_col, mask_tile_col)
 
 
-def rf_inverse_mask(*args):
+def rf_inverse_mask(src_tile_col, mask_tile_col):
     """Where the rf_mask (second) tile DOES NOT contain NODATA, replace values in the source (first) tile with NODATA."""
-    return _apply_column_function('rf_inverse_mask', *args)
+    return _apply_column_function('rf_inverse_mask', src_tile_col, mask_tile_col)
 
 
-def rf_local_less(*args):
+def rf_local_less(left_tile_col, right_tile_col):
     """Cellwise less than comparison between two tiles"""
-    return _apply_column_function('rf_local_less', *args)
+    return _apply_column_function('rf_local_less', left_tile_col, right_tile_col)
 
 
-def rf_local_less_equal(*args):
+def rf_local_less_equal(left_tile_col, right_tile_col):
     """Cellwise less than or equal to comparison between two tiles"""
-    return _apply_column_function('rf_local_less_equal', *args)
+    return _apply_column_function('rf_local_less_equal', left_tile_col, right_tile_col)
 
 
-def rf_local_greater(*args):
+def rf_local_greater(left_tile_col, right_tile_col):
     """Cellwise greater than comparison between two tiles"""
-    return _apply_column_function('rf_local_greater', *args)
+    return _apply_column_function('rf_local_greater', left_tile_col, right_tile_col)
 
 
-def rf_local_greater_equal(*args):
+def rf_local_greater_equal(left_tile_col, right_tile_col):
     """Cellwise greater than or equal to comparison between two tiles"""
-    return _apply_column_function('rf_local_greater_equal', *args)
+    return _apply_column_function('rf_local_greater_equal', left_tile_col, right_tile_col)
 
 
-def rf_local_equal(*args):
+def rf_local_equal(left_tile_col, right_tile_col):
     """Cellwise equality comparison between two tiles"""
-    return _apply_column_function('rf_local_equal', *args)
+    return _apply_column_function('rf_local_equal', left_tile_col, right_tile_col)
 
 
-def rf_local_unequal(*args):
+def rf_local_unequal(left_tile_col, right_tile_col):
     """Cellwise inequality comparison between two tiles"""
-    return _apply_column_function('rf_local_unequal', *args)
+    return _apply_column_function('rf_local_unequal', left_tile_col, right_tile_col)
 
 
-def rf_round(*args):
+def rf_round(tile_col):
     """Round cell values to the nearest integer without changing the cell type"""
-    return _apply_column_function('rf_round', *args)
+    return _apply_column_function('rf_round', tile_col)
 
 
-def rf_abs(*args):
+def rf_abs(tile_col):
     """Compute the absolute value of each cell"""
-    return _apply_column_function('rf_abs', *args)
+    return _apply_column_function('rf_abs', tile_col)
 
 
-def rf_log(*args):
+def rf_log(tile_col):
     """Performs cell-wise natural logarithm"""
-    return _apply_column_function('rf_log', *args)
+    return _apply_column_function('rf_log', tile_col)
 
 
-def rf_log10(*args):
+def rf_log10(tile_col):
     """Performs cell-wise logartithm with base 10"""
-    return _apply_column_function('rf_log10', *args)
+    return _apply_column_function('rf_log10', tile_col)
 
 
-def rf_log2(*args):
+def rf_log2(tile_col):
     """Performs cell-wise logartithm with base 2"""
-    return _apply_column_function('rf_log2', *args)
+    return _apply_column_function('rf_log2', tile_col)
 
 
-def rf_log1p(*args):
+def rf_log1p(tile_col):
     """Performs natural logarithm of cell values plus one"""
-    return _apply_column_function('rf_log1p', *args)
+    return _apply_column_function('rf_log1p', tile_col)
 
 
-def rf_exp(*args):
+def rf_exp(tile_col):
     """Performs cell-wise exponential"""
-    return _apply_column_function('rf_exp', *args)
+    return _apply_column_function('rf_exp', tile_col)
 
 
-def rf_exp2(*args):
+def rf_exp2(tile_col):
     """Compute 2 to the power of cell values"""
-    return _apply_column_function('rf_exp2', *args)
+    return _apply_column_function('rf_exp2', tile_col)
 
 
-def rf_exp10(*args):
+def rf_exp10(tile_col):
     """Compute 10 to the power of cell values"""
-    return _apply_column_function('rf_exp10', *args)
+    return _apply_column_function('rf_exp10', tile_col)
 
 
-def rf_expm1(*args):
+def rf_expm1(tile_col):
     """Performs cell-wise exponential, then subtract one"""
-    return _apply_column_function('rf_expm1', *args)
+    return _apply_column_function('rf_expm1', tile_col)
 
 
-def rf_identity(*args):
+def rf_identity(tile_col):
     """Pass tile through unchanged"""
-    return _apply_column_function('rf_identity', *args)
+    return _apply_column_function('rf_identity', tile_col)
 
 
-def rf_resample(*args):
-    """Resample tile to different size based on scalar factor or tile whose dimension to match"""
-    return _apply_column_function('rf_resample', *args)
+def rf_resample(tile_col, scale_factor_col):
+    """Resample tile to different size based on scalar factor or tile whose dimension to match
+    Scalar less than one will downsample tile; greater than one will upsample. Uses nearest-neighbor."""
+    return _apply_column_function('rf_resample', tile_col, scale_factor_col)
 
 
-def rf_crs(*args):
+def rf_crs(tile_col):
     """Get the CRS of a RasterSource or ProjectedRasterTile"""
-    return _apply_column_function('rf_crs', *args)
+    return _apply_column_function('rf_crs', tile_col)
 
 
-def st_extent(*args):
+def rf_mk_crs(crs_text):
+    """Resolve CRS from text identifier. Supported registries are EPSG, ESRI, WORLD, NAD83, & NAD27.
+    An example of a valid CRS name is EPSG:3005."""
+    return Column(_context_call('_make_crs_literal', crs_text))
+
+
+def st_extent(geom_col):
     """Compute the extent/bbox of a Geometry (a tile with embedded extent and CRS)"""
-    return _apply_column_function('st_extent', *args)
+    return _apply_column_function('st_extent', geom_col)
 
 
-def rf_extent(*args):
+def rf_extent(proj_raster_col):
     """Get the extent of a RasterSource or ProjectedRasterTile (a tile with embedded extent and CRS)"""
-    return _apply_column_function('rf_extent', *args)
+    return _apply_column_function('rf_extent', proj_raster_col)
 
 
-def rf_tile(*args):
+def rf_tile(proj_raster_col):
     """Extracts the Tile component of a ProjectedRasterTile (or Tile)."""
-    return _apply_column_function('rf_tile', *args)
+    return _apply_column_function('rf_tile', proj_raster_col)
 
 
-def st_geometry(*args):
+def st_geometry(geom_col):
     """Convert the given extent/bbox to a polygon"""
-    return _apply_column_function('st_geometry', *args)
+    return _apply_column_function('st_geometry', geom_col)
 
 
-def rf_geometry(*args):
+def rf_geometry(proj_raster_col):
     """Get the extent of a RasterSource or ProjectdRasterTile as a Geometry"""
-    return _apply_column_function('rf_geometry', *args)
+    return _apply_column_function('rf_geometry', proj_raster_col)
 
+# ------ GeoMesa Functions ------
 
 def st_geomFromGeoHash(*args):
     """"""

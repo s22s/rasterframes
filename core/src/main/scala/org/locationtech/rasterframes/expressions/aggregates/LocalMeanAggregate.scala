@@ -22,7 +22,7 @@
 package org.locationtech.rasterframes.expressions.aggregates
 
 import org.locationtech.rasterframes.expressions.UnaryRasterAggregate
-import org.locationtech.rasterframes.expressions.localops.{Add => AddTiles, Divide => DivideTiles}
+import org.locationtech.rasterframes.expressions.localops.{BiasedAdd, Divide => DivideTiles}
 import org.locationtech.rasterframes.expressions.transformers.SetCellType
 import geotrellis.raster.Tile
 import geotrellis.raster.mapalgebra.local
@@ -30,6 +30,7 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression
 import org.apache.spark.sql.types.DataType
 import org.apache.spark.sql.{Column, TypedColumn}
 import org.locationtech.rasterframes.TileType
+import org.locationtech.rasterframes.expressions.accessors.RealizeTile
 
 @ExpressionDescription(
   usage = "_FUNC_(tile) - Computes a new tile contining the mean cell values across all tiles in column.",
@@ -58,17 +59,17 @@ case class LocalMeanAggregate(child: Expression) extends UnaryRasterAggregate {
   )
   override lazy val updateExpressions: Seq[Expression] = Seq(
     If(IsNull(count),
-      SetCellType(Defined(child), Literal("int32")),
-      If(IsNull(child), count, AddTiles(count, Defined(child)))
+      SetCellType(RealizeTile(Defined(child)), Literal("int32")),
+      If(IsNull(child), count, BiasedAdd(count, Defined(RealizeTile(child))))
     ),
     If(IsNull(sum),
-      SetCellType(child, Literal("float64")),
-      If(IsNull(child), sum, AddTiles(sum, child))
+      SetCellType(RealizeTile(child), Literal("float64")),
+      If(IsNull(child), sum, BiasedAdd(sum, child))
     )
   )
   override val mergeExpressions: Seq[Expression] = Seq(
-    AddTiles(count.left, count.right),
-    AddTiles(sum.left, sum.right)
+    BiasedAdd(count.left, count.right),
+    BiasedAdd(sum.left, sum.right)
   )
   override lazy val evaluateExpression: Expression = DivideTiles(sum, count)
 }

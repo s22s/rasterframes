@@ -21,34 +21,44 @@
 
 package org.locationtech.rasterframes.expressions
 
+import geotrellis.proj4.CRS
 import geotrellis.raster.{CellGrid, Tile}
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.rf.{TileUDT, _}
+import org.apache.spark.sql.rf.{RasterSourceUDT, TileUDT}
 import org.apache.spark.sql.types._
+import org.apache.spark.unsafe.types.UTF8String
 import org.locationtech.rasterframes.encoders.CatalystSerializer._
-import org.locationtech.rasterframes.model.TileContext
+import org.locationtech.rasterframes.model.{LazyCRS, TileContext}
 import org.locationtech.rasterframes.ref.{ProjectedRasterLike, RasterRef, RasterSource}
 import org.locationtech.rasterframes.tiles.ProjectedRasterTile
 
 private[rasterframes]
 object DynamicExtractors {
-  /** Partial function for pulling a tile and its contesxt from an input row. */
+  /** Partial function for pulling a tile and its context from an input row. */
   lazy val tileExtractor: PartialFunction[DataType, InternalRow => (Tile, Option[TileContext])] = {
     case _: TileUDT =>
       (row: InternalRow) =>
         (row.to[Tile](TileUDT.tileSerializer), None)
-    case t if t.conformsTo(schemaOf[ProjectedRasterTile]) =>
+    case t if t.conformsTo[ProjectedRasterTile] =>
       (row: InternalRow) => {
         val prt = row.to[ProjectedRasterTile]
         (prt, Some(TileContext(prt)))
       }
   }
 
+  lazy val rasterRefExtractor: PartialFunction[DataType, InternalRow => RasterRef] = {
+    case t if t.conformsTo[RasterRef] =>
+      (row: InternalRow) => row.to[RasterRef]
+  }
+
+  lazy val tileableExtractor: PartialFunction[DataType, InternalRow => Tile] =
+    tileExtractor.andThen(_.andThen(_._1)).orElse(rasterRefExtractor.andThen(_.andThen(_.tile)))
+
   lazy val rowTileExtractor: PartialFunction[DataType, Row => (Tile, Option[TileContext])] = {
     case _: TileUDT =>
       (row: Row) =>  (row.to[Tile](TileUDT.tileSerializer), None)
-    case t if t.conformsTo(schemaOf[ProjectedRasterTile]) =>
+    case t if t.conformsTo[ProjectedRasterTile] =>
       (row: Row) => {
         val prt = row.to[ProjectedRasterTile]
         (prt, Some(TileContext(prt)))
@@ -59,9 +69,9 @@ object DynamicExtractors {
   lazy val projectedRasterLikeExtractor: PartialFunction[DataType, InternalRow ⇒ ProjectedRasterLike] = {
     case _: RasterSourceUDT ⇒
       (row: InternalRow) => row.to[RasterSource](RasterSourceUDT.rasterSourceSerializer)
-    case t if t.conformsTo(schemaOf[ProjectedRasterTile]) =>
+    case t if t.conformsTo[ProjectedRasterTile] =>
       (row: InternalRow) => row.to[ProjectedRasterTile]
-    case t if t.conformsTo(schemaOf[RasterRef]) =>
+    case t if t.conformsTo[RasterRef] =>
       (row: InternalRow) => row.to[RasterRef]
   }
 
@@ -71,10 +81,17 @@ object DynamicExtractors {
       (row: InternalRow) => row.to[Tile](TileUDT.tileSerializer)
     case _: RasterSourceUDT =>
       (row: InternalRow) => row.to[RasterSource](RasterSourceUDT.rasterSourceSerializer)
-    case t if t.conformsTo(schemaOf[RasterRef]) ⇒
+    case t if t.conformsTo[RasterRef] ⇒
       (row: InternalRow) => row.to[RasterRef]
-    case t if t.conformsTo(schemaOf[ProjectedRasterTile]) =>
+    case t if t.conformsTo[ProjectedRasterTile] =>
       (row: InternalRow) => row.to[ProjectedRasterTile]
+  }
+
+  lazy val crsExtractor: PartialFunction[DataType, Any => CRS] = {
+    case _: StringType =>
+      (v: Any) => LazyCRS(v.asInstanceOf[UTF8String].toString)
+    case t if t.conformsTo[CRS] =>
+      (v: Any) => v.asInstanceOf[InternalRow].to[CRS]
   }
 
   sealed trait TileOrNumberArg
@@ -113,4 +130,5 @@ object DynamicExtractors {
       case c: Char  => IntegerArg(c.toInt)
     }
   }
+
 }
