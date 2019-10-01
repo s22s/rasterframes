@@ -1,5 +1,5 @@
 // Internal Astraea-specific overides
-ThisBuild / version := "0.8.0-astraea-SNAPSHOT"
+ThisBuild / version := "0.8.3-astraea-SNAPSHOT"
 ThisBuild / credentials += Credentials(Path.userHome / ".sbt" / ".credentials")
 publishTo := {
   val base = "https://s22s.mycloudrepo.io/repositories"
