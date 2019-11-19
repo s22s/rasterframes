@@ -53,20 +53,50 @@ trait RasterFunctions {
   /** Query the number of (cols, rows) in a Tile. */
   def rf_dimensions(col: Column): TypedColumn[Any, TileDimensions] = GetDimensions(col)
 
+  /** Extracts the CRS from a RasterSource or ProjectedRasterTile */
+  def rf_crs(col: Column): TypedColumn[Any, CRS] = GetCRS(col)
+
   /** Extracts the bounding box of a geometry as an Extent */
   def st_extent(col: Column): TypedColumn[Any, Extent] = GeometryToExtent(col)
 
   /** Extracts the bounding box from a RasterSource or ProjectedRasterTile */
   def rf_extent(col: Column): TypedColumn[Any, Extent] = GetExtent(col)
 
-  /** Constructs a XZ2 index in WGS84 from either a Geometry, Extent, ProjectedRasterTile, or RasterSource and its CRS */
-  def rf_spatial_index(targetExtent: Column, targetCRS: Column) = XZ2Indexer(targetExtent, targetCRS)
+  /** Constructs a XZ2 index in WGS84 from either a Geometry, Extent, ProjectedRasterTile, or RasterSource and its CRS.
+    * For details: https://www.geomesa.org/documentation/user/datastores/index_overview.html */
+  def rf_xz2_index(targetExtent: Column, targetCRS: Column, indexResolution: Short) = XZ2Indexer(targetExtent, targetCRS, indexResolution)
 
-  /** Constructs a XZ2 index in WGS84 from either a ProjectedRasterTile or RasterSource */
-  def rf_spatial_index(targetExtent: Column) = XZ2Indexer(targetExtent)
+  /** Constructs a XZ2 index in WGS84 from either a Geometry, Extent, ProjectedRasterTile, or RasterSource and its CRS
+    * For details: https://www.geomesa.org/documentation/user/datastores/index_overview.html */
+  def rf_xz2_index(targetExtent: Column, targetCRS: Column) = XZ2Indexer(targetExtent, targetCRS, 18: Short)
 
-  /** Extracts the CRS from a RasterSource or ProjectedRasterTile */
-  def rf_crs(col: Column): TypedColumn[Any, CRS] = GetCRS(col)
+  /** Constructs a XZ2 index with provided resolution level in WGS84 from either a ProjectedRasterTile or RasterSource.
+    * For details: https://www.geomesa.org/documentation/user/datastores/index_overview.html  */
+  def rf_xz2_index(targetExtent: Column, indexResolution: Short) = XZ2Indexer(targetExtent, indexResolution)
+
+  /** Constructs a XZ2 index with level 18 resolution in WGS84 from either a ProjectedRasterTile or RasterSource.
+    * For details: https://www.geomesa.org/documentation/user/datastores/index_overview.html  */
+  def rf_xz2_index(targetExtent: Column) = XZ2Indexer(targetExtent, 18: Short)
+
+  /** Constructs a Z2 index in WGS84 from either a Geometry, Extent, ProjectedRasterTile, or RasterSource and its CRS.
+    * First the native extent is extracted or computed, and then center is used as the indexing location.
+    * For details: https://www.geomesa.org/documentation/user/datastores/index_overview.html */
+  def rf_z2_index(targetExtent: Column, targetCRS: Column, indexResolution: Short) = Z2Indexer(targetExtent, targetCRS, indexResolution)
+
+  /** Constructs a Z2 index with index resolution of 31 in WGS84 from either a Geometry, Extent, ProjectedRasterTile, or RasterSource and its CRS.
+    * First the native extent is extracted or computed, and then center is used as the indexing location.
+    * For details: https://www.geomesa.org/documentation/user/datastores/index_overview.html */
+  def rf_z2_index(targetExtent: Column, targetCRS: Column) = Z2Indexer(targetExtent, targetCRS, 31: Short)
+
+  /** Constructs a Z2 index with the given index resolution in WGS84 from either a ProjectedRasterTile or RasterSource
+    * First the native extent is extracted or computed, and then center is used as the indexing location.
+    * For details: https://www.geomesa.org/documentation/user/datastores/index_overview.html  */
+  def rf_z2_index(targetExtent: Column, indexResolution: Short) = Z2Indexer(targetExtent, indexResolution)
+
+  /** Constructs a Z2 index with index resolution of 31 in WGS84 from either a ProjectedRasterTile or RasterSource
+    * First the native extent is extracted or computed, and then center is used as the indexing location.
+    * For details: https://www.geomesa.org/documentation/user/datastores/index_overview.html  */
+  def rf_z2_index(targetExtent: Column) = Z2Indexer(targetExtent, 31: Short)
 
   /** Extracts the tile from a ProjectedRasterTile, or passes through a Tile. */
   def rf_tile(col: Column): TypedColumn[Any, Tile] = RealizeTile(col)
@@ -282,12 +312,38 @@ trait RasterFunctions {
   }
 
   /** Where the rf_mask tile contains NODATA, replace values in the source tile with NODATA */
-  def rf_mask(sourceTile: Column, maskTile: Column): TypedColumn[Any, Tile] =
-    Mask.MaskByDefined(sourceTile, maskTile)
+  def rf_mask(sourceTile: Column, maskTile: Column): TypedColumn[Any, Tile] = rf_mask(sourceTile, maskTile, false)
+
+  /** Where the rf_mask tile contains NODATA, replace values in the source tile with NODATA */
+  def rf_mask(sourceTile: Column, maskTile: Column, inverse: Boolean=false): TypedColumn[Any, Tile] =
+    if(!inverse) Mask.MaskByDefined(sourceTile, maskTile)
+    else Mask.InverseMaskByDefined(sourceTile, maskTile)
 
   /** Where the `maskTile` equals `maskValue`, replace values in the source tile with `NoData` */
-  def rf_mask_by_value(sourceTile: Column, maskTile: Column, maskValue: Column): TypedColumn[Any, Tile] =
-    Mask.MaskByValue(sourceTile, maskTile, maskValue)
+  def rf_mask_by_value(sourceTile: Column, maskTile: Column, maskValue: Column, inverse: Boolean=false): TypedColumn[Any, Tile] =
+    if (!inverse) Mask.MaskByValue(sourceTile, maskTile, maskValue)
+    else Mask.InverseMaskByValue(sourceTile, maskTile, maskValue)
+
+  /** Where the `maskTile` equals `maskValue`, replace values in the source tile with `NoData` */
+  def rf_mask_by_value(sourceTile: Column, maskTile: Column, maskValue: Int, inverse: Boolean): TypedColumn[Any, Tile] =
+    rf_mask_by_value(sourceTile, maskTile, lit(maskValue), inverse)
+
+  /** Where the `maskTile` equals `maskValue`, replace values in the source tile with `NoData` */
+  def rf_mask_by_value(sourceTile: Column, maskTile: Column, maskValue: Int): TypedColumn[Any, Tile] =
+    rf_mask_by_value(sourceTile, maskTile, maskValue, false)
+
+  /** Generate a tile with the values from `data_tile`, but where cells in the `mask_tile` are in the `mask_values`
+       list, replace the value with NODATA. */
+  def rf_mask_by_values(sourceTile: Column, maskTile: Column, maskValues: Column): TypedColumn[Any, Tile] =
+      Mask.MaskByValues(sourceTile, maskTile, maskValues)
+
+  /** Generate a tile with the values from `data_tile`, but where cells in the `mask_tile` are in the `mask_values`
+       list, replace the value with NODATA. */
+  def rf_mask_by_values(sourceTile: Column, maskTile: Column, maskValues: Int*): TypedColumn[Any, Tile] = {
+    import org.apache.spark.sql.functions.array
+    val valuesCol: Column = array(maskValues.map(lit).toSeq: _*)
+    rf_mask_by_values(sourceTile, maskTile, valuesCol)
+  }
 
   /** Where the `maskTile` does **not** contain `NoData`, replace values in the source tile with `NoData` */
   def rf_inverse_mask(sourceTile: Column, maskTile: Column): TypedColumn[Any, Tile] =
@@ -296,6 +352,56 @@ trait RasterFunctions {
   /** Where the `maskTile` does **not** equal `maskValue`, replace values in the source tile with `NoData` */
   def rf_inverse_mask_by_value(sourceTile: Column, maskTile: Column, maskValue: Column): TypedColumn[Any, Tile] =
     Mask.InverseMaskByValue(sourceTile, maskTile, maskValue)
+
+  /** Where the `maskTile` does **not** equal `maskValue`, replace values in the source tile with `NoData` */
+  def rf_inverse_mask_by_value(sourceTile: Column, maskTile: Column, maskValue: Int): TypedColumn[Any, Tile] =
+    Mask.InverseMaskByValue(sourceTile, maskTile, lit(maskValue))
+
+  /** Applies a mask using bit values in the `mask_tile`. Working from the right, extract the bit at `bitPosition` from the `maskTile`. In all locations where these are equal to the `valueToMask`, the returned tile is set to NoData, else the original `dataTile` cell value. */
+  def rf_mask_by_bit(dataTile: Column, maskTile: Column, bitPosition: Int, valueToMask: Boolean): TypedColumn[Any, Tile] =
+    rf_mask_by_bit(dataTile, maskTile, lit(bitPosition), lit(if (valueToMask) 1 else 0))
+
+  /** Applies a mask using bit values in the `mask_tile`. Working from the right, extract the bit at `bitPosition` from the `maskTile`. In all locations where these are equal to the `valueToMask`, the returned tile is set to NoData, else the original `dataTile` cell value. */
+  def rf_mask_by_bit(dataTile: Column, maskTile: Column, bitPosition: Column, valueToMask: Column): TypedColumn[Any, Tile] = {
+    import org.apache.spark.sql.functions.array
+    rf_mask_by_bits(dataTile, maskTile, bitPosition, lit(1), array(valueToMask))
+  }
+
+  /** Applies a mask from blacklisted bit values in the `mask_tile`. Working from the right, the bits from `start_bit` to `start_bit + num_bits` are @ref:[extracted](reference.md#rf_local_extract_bits) from cell values of the `mask_tile`. In all locations where these are in the `mask_values`, the returned tile is set to NoData; otherwise the original `tile` cell value is returned. */
+  def rf_mask_by_bits(dataTile: Column, maskTile: Column, startBit: Column, numBits: Column, valuesToMask: Column): TypedColumn[Any, Tile] = {
+    val bitMask =  rf_local_extract_bits(maskTile, startBit, numBits)
+    rf_mask_by_values(dataTile, bitMask, valuesToMask)
+  }
+
+
+  /** Applies a mask from blacklisted bit values in the `mask_tile`. Working from the right, the bits from `start_bit` to `start_bit + num_bits` are @ref:[extracted](reference.md#rf_local_extract_bits) from cell values of the `mask_tile`. In all locations where these are in the `mask_values`, the returned tile is set to NoData; otherwise the original `tile` cell value is returned. */
+  def rf_mask_by_bits(dataTile: Column, maskTile: Column, startBit: Int, numBits: Int, valuesToMask: Int*): TypedColumn[Any, Tile] = {
+    import org.apache.spark.sql.functions.array
+    val values = array(valuesToMask.map(lit):_*)
+    rf_mask_by_bits(dataTile, maskTile, lit(startBit), lit(numBits), values)
+  }
+
+  /** Extract value from specified bits of the cells' underlying binary data.
+    * `startBit` is the first bit to consider, working from the right. It is zero indexed.
+    * `numBits` is the number of bits to take moving further to the left. */
+  def rf_local_extract_bits(tile: Column, startBit: Column, numBits: Column): Column =
+    ExtractBits(tile, startBit, numBits)
+
+  /** Extract value from specified bits of the cells' underlying binary data.
+    * `bitPosition` is bit to consider, working from the right. It is zero indexed. */
+  def rf_local_extract_bits(tile: Column, bitPosition: Column): Column =
+    rf_local_extract_bits(tile, bitPosition, lit(1))
+
+  /** Extract value from specified bits of the cells' underlying binary data.
+    * `startBit` is the first bit to consider, working from the right. It is zero indexed.
+    * `numBits` is the number of bits to take, moving further to the left. */
+  def rf_local_extract_bits(tile: Column, startBit: Int, numBits: Int): Column =
+    rf_local_extract_bits(tile, lit(startBit), lit(numBits))
+
+  /** Extract value from specified bits of the cells' underlying binary data.
+    * `bitPosition` is bit to consider, working from the right. It is zero indexed. */
+  def rf_local_extract_bits(tile: Column, bitPosition: Int): Column =
+    rf_local_extract_bits(tile, lit(bitPosition))
 
   /** Create a tile where cells in the grid defined by cols, rows, and bounds are filled with the given value. */
   def rf_rasterize(geometry: Column, bounds: Column, value: Column, cols: Int, rows: Int): TypedColumn[Any, Tile] =
@@ -394,6 +500,12 @@ trait RasterFunctions {
 
   /** Cellwise inequality comparison between a tile and a scalar. */
   def rf_local_unequal[T: Numeric](tileCol: Column, value: T): Column = Unequal(tileCol, value)
+
+  /** Test if each cell value is in provided array */
+  def rf_local_is_in(tileCol: Column, arrayCol: Column) = IsIn(tileCol, arrayCol)
+
+  /** Test if each cell value is in provided array */
+  def rf_local_is_in(tileCol: Column, array: Array[Int]) = IsIn(tileCol, array)
 
   /** Return a tile with ones where the input is NoData, otherwise zero */
   def rf_local_no_data(tileCol: Column): Column = Undefined(tileCol)

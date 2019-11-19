@@ -21,9 +21,11 @@
 
 package org.locationtech.rasterframes.jts
 
-import org.locationtech.jts.geom.{CoordinateSequence, Geometry}
+import org.locationtech.jts.geom.{CoordinateSequence, Envelope, Geometry, GeometryFactory, Point}
 import org.locationtech.jts.geom.util.GeometryTransformer
 import geotrellis.proj4.CRS
+import geotrellis.vector.Extent
+import org.locationtech.jts.algorithm.Centroid
 
 /**
  * JTS Geometry reprojection transformation routine.
@@ -31,8 +33,17 @@ import geotrellis.proj4.CRS
  * @since 6/4/18
  */
 class ReprojectionTransformer(src: CRS, dst: CRS) extends GeometryTransformer {
-  def apply(geometry: Geometry): Geometry = transform(geometry)
   lazy val transform = geotrellis.proj4.Transform(src, dst)
+  @transient
+  private lazy val gf = new GeometryFactory()
+  def apply(geometry: Geometry): Geometry = transform(geometry)
+  def apply(extent: Extent): Geometry = transform(extent.jtsGeom)
+  def apply(env: Envelope): Geometry = transform(gf.toGeometry(env))
+  def apply(pt: Point): Point = {
+    val t = transform(pt)
+    gf.createPoint(Centroid.getCentroid(t))
+  }
+
   override def transformCoordinates(coords: CoordinateSequence, parent: Geometry): CoordinateSequence = {
     val fact = parent.getFactory
     val retval = fact.getCoordinateSequenceFactory.create(coords)

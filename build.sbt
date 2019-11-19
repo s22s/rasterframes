@@ -32,7 +32,10 @@ lazy val root = project
   .withId("RasterFrames")
   .aggregate(core, datasource, pyrasterframes, experimental)
   .enablePlugins(RFReleasePlugin)
-  .settings(publish / skip := true)
+  .settings(
+    publish / skip := true,
+    clean := clean.dependsOn(`rf-notebook`/clean, docs/clean).value
+  )
 
 lazy val `rf-notebook` = project
   .dependsOn(pyrasterframes)
@@ -73,7 +76,6 @@ lazy val core = project
     buildInfoObject := "RFBuildInfo",
     buildInfoOptions := Seq(
       BuildInfoOption.ToMap,
-      BuildInfoOption.BuildTime,
       BuildInfoOption.ToJson
     )
   )

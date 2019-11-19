@@ -25,6 +25,8 @@ from pyrasterframes.rasterfunctions import *
 from pyrasterframes.rf_types import *
 from pyspark.sql import SQLContext
 from pyspark.sql.functions import *
+from pyspark.sql import Row
+
 from . import TestEnvironment
 
 
@@ -131,13 +133,29 @@ class UDT(TestEnvironment):
             cells[1][1] = nd
             a_tile = Tile(cells, ct.with_no_data_value(nd))
             round_trip = udt.fromInternal(udt.toInternal(a_tile))
-            self.assertEquals(a_tile, round_trip, "round-trip serialization for " + str(ct))
+            self.assertEqual(a_tile, round_trip, "round-trip serialization for " + str(ct))
 
             schema = StructType([StructField("tile", TileUDT(), False)])
             df = self.spark.createDataFrame([{"tile": a_tile}], schema)
 
             long_trip = df.first()["tile"]
             self.assertEqual(long_trip, a_tile)
+
+    def test_masked_deser(self):
+        t = Tile(np.array([[1, 2, 3,], [4, 5, 6], [7, 8, 9]]),
+                 CellType('uint8'))
+
+        df = self.spark.createDataFrame([Row(t=t)])
+        roundtrip = df.select(rf_mask_by_value('t',
+                                               rf_local_greater('t', lit(6)),
+                                               1)) \
+            .first()[0]
+        self.assertEqual(
+            roundtrip.cells.mask.sum(),
+            3,
+            f"Expected {3} nodata values but found Tile"
+            f"{roundtrip}"
+        )
 
     def test_udf_on_tile_type_input(self):
         import numpy.testing
@@ -248,7 +266,6 @@ class UDT(TestEnvironment):
 class TileOps(TestEnvironment):
 
     def setUp(self):
-        from pyspark.sql import Row
         # convenience so we can assert around Tile() == Tile()
         self.t1 = Tile(np.array([[1, 2],
                                  [3, 4]]), CellType.int8().with_no_data_value(3))

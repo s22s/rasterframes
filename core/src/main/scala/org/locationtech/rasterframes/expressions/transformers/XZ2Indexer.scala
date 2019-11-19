@@ -22,28 +22,21 @@
 package org.locationtech.rasterframes.expressions.transformers
 
 import geotrellis.proj4.LatLng
-import geotrellis.vector.Extent
 import org.apache.spark.sql.catalyst.analysis.TypeCheckResult
 import org.apache.spark.sql.catalyst.analysis.TypeCheckResult.{TypeCheckFailure, TypeCheckSuccess}
 import org.apache.spark.sql.catalyst.expressions.codegen.CodegenFallback
 import org.apache.spark.sql.catalyst.expressions.{BinaryExpression, Expression, ExpressionDescription}
-import org.apache.spark.sql.jts.JTSTypes
-import org.apache.spark.sql.rf.RasterSourceUDT
 import org.apache.spark.sql.types.{DataType, LongType}
 import org.apache.spark.sql.{Column, TypedColumn}
 import org.locationtech.geomesa.curve.XZ2SFC
-import org.locationtech.jts.geom.{Envelope, Geometry, GeometryFactory}
-import org.locationtech.rasterframes.encoders.CatalystSerializer._
 import org.locationtech.rasterframes.expressions.DynamicExtractors._
-import org.locationtech.rasterframes.expressions.row
-import org.locationtech.rasterframes.jts.ReprojectionTransformer
-import org.locationtech.rasterframes.ref.{RasterRef, RasterSource}
-import org.locationtech.rasterframes.tiles.ProjectedRasterTile
-import org.apache.spark.sql.rf
 import org.locationtech.rasterframes.expressions.accessors.GetCRS
+import org.locationtech.rasterframes.jts.ReprojectionTransformer
 
 /**
   * Constructs a XZ2 index in WGS84 from either a Geometry, Extent, ProjectedRasterTile, or RasterSource
+  * This function is useful for [range partitioning](http://spark.apache.org/docs/latest/api/python/pyspark.sql.html?highlight=registerjava#pyspark.sql.DataFrame.repartitionByRange).
+  * Also see: https://www.geomesa.org/documentation/user/datastores/index_overview.html
   *
   * @param left geometry-like column
   * @param right CRS column
@@ -59,56 +52,33 @@ import org.locationtech.rasterframes.expressions.accessors.GetCRS
     * crs - the native CRS of the `geom` column
 """
 )
-case class XZ2Indexer(left: Expression, right: Expression, indexResolution: Short = 18)
+case class XZ2Indexer(left: Expression, right: Expression, indexResolution: Short)
   extends BinaryExpression with CodegenFallback {
 
-  override def nodeName: String = "rf_spatial_index"
+  override def nodeName: String = "rf_xz2_index"
 
   override def dataType: DataType = LongType
 
   override def checkInputDataTypes(): TypeCheckResult = {
-    if (!extentLikeExtractor.orElse(projectedRasterLikeExtractor).isDefinedAt(left.dataType))
-      TypeCheckFailure(s"Input type '${left.dataType}' does not look like something with an Extent or something with one.")
+    if (!envelopeExtractor.isDefinedAt(left.dataType))
+      TypeCheckFailure(s"Input type '${left.dataType}' does not look like a geometry, extent, or something with one.")
     else if(!crsExtractor.isDefinedAt(right.dataType))
-      TypeCheckFailure(s"Input type '${right.dataType}' does not look like something with a CRS.")
+      TypeCheckFailure(s"Input type '${right.dataType}' does not look like a CRS or something with one.")
     else TypeCheckSuccess
   }
 
   private lazy val indexer = XZ2SFC(indexResolution)
-  private lazy val gf = new GeometryFactory()
 
   override protected def nullSafeEval(leftInput: Any, rightInput: Any): Any = {
     val crs = crsExtractor(right.dataType)(rightInput)
-
-    val coords = left.dataType match {
-      case t if rf.WithTypeConformity(t).conformsTo(JTSTypes.GeometryTypeInstance) =>
-        JTSTypes.GeometryTypeInstance.deserialize(leftInput)
-      case t if t.conformsTo[Extent] =>
-        row(leftInput).to[Extent]
-      case t if t.conformsTo[Envelope] =>
-        row(leftInput).to[Envelope]
-      case _: RasterSourceUDT ⇒
-        row(leftInput).to[RasterSource](RasterSourceUDT.rasterSourceSerializer).extent
-      case t if t.conformsTo[ProjectedRasterTile] =>
-        row(leftInput).to[ProjectedRasterTile].extent
-      case t if t.conformsTo[RasterRef] =>
-        row(leftInput).to[RasterRef].extent
-    }
+    val coords = envelopeExtractor(left.dataType)(leftInput)
 
     // If no transformation is needed then just normalize to an Envelope
-    val env = if(crs == LatLng) coords match {
-      case e: Extent => e.jtsEnvelope
-      case g: Geometry => g.getEnvelopeInternal
-      case e: Envelope => e
-    }
+    val env = if(crs == LatLng) coords
     // Otherwise convert to geometry, transform, and get envelope
     else {
       val trans = new ReprojectionTransformer(crs, LatLng)
-      coords match {
-        case e: Extent => trans(e.jtsGeom).getEnvelopeInternal
-        case g: Geometry => trans(g).getEnvelopeInternal
-        case e: Envelope => trans(gf.toGeometry(e)).getEnvelopeInternal
-      }
+      trans(coords).getEnvelopeInternal
     }
 
     val index = indexer.index(
@@ -121,8 +91,10 @@ case class XZ2Indexer(left: Expression, right: Expression, indexResolution: Shor
 
 object XZ2Indexer {
   import org.locationtech.rasterframes.encoders.SparkBasicEncoders.longEnc
+  def apply(targetExtent: Column, targetCRS: Column, indexResolution: Short): TypedColumn[Any, Long] =
+    new Column(new XZ2Indexer(targetExtent.expr, targetCRS.expr, indexResolution)).as[Long]
   def apply(targetExtent: Column, targetCRS: Column): TypedColumn[Any, Long] =
-    new Column(new XZ2Indexer(targetExtent.expr, targetCRS.expr)).as[Long]
-  def apply(targetExtent: Column): TypedColumn[Any, Long] =
-    new Column(new XZ2Indexer(targetExtent.expr, GetCRS(targetExtent.expr))).as[Long]
+    new Column(new XZ2Indexer(targetExtent.expr, targetCRS.expr, 18)).as[Long]
+  def apply(targetExtent: Column, indexResolution: Short = 18): TypedColumn[Any, Long] =
+    new Column(new XZ2Indexer(targetExtent.expr, GetCRS(targetExtent.expr), indexResolution)).as[Long]
 }

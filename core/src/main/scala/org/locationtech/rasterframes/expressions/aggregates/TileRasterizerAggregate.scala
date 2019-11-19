@@ -100,9 +100,7 @@ object TileRasterizerAggregate {
 
     def apply(tlm: TileLayerMetadata[_], sampler: ResampleMethod): ProjectedRasterDefinition = {
       // Try to determine the actual dimensions of our data coverage
-      val actualSize = tlm.layout.toRasterExtent().gridBoundsFor(tlm.extent) // <--- Do we have the math right here?
-      val cols = actualSize.width
-      val rows = actualSize.height
+      val TileDimensions(cols, rows) = tlm.totalDimensions
       new ProjectedRasterDefinition(cols, rows, tlm.cellType, tlm.crs, tlm.extent, sampler)
     }
   }
@@ -138,7 +136,7 @@ object TileRasterizerAggregate {
       }
     }
 
-    // Scan table and constuct what the TileLayerMetadata would be in the specified destination CRS.
+    // Scan table and construct what the TileLayerMetadata would be in the specified destination CRS.
     val tlm: TileLayerMetadata[SpatialKey] = df
       .select(
         ProjectedLayerMetadataAggregate(

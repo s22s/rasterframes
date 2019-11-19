@@ -21,13 +21,10 @@
 
 package org.locationtech.rasterframes.expressions.transformers
 
-import org.locationtech.rasterframes.encoders.CatalystSerializer._
-import org.locationtech.rasterframes.expressions.DynamicExtractors._
-import org.locationtech.rasterframes.expressions.row
-import com.typesafe.scalalogging.LazyLogging
+import com.typesafe.scalalogging.Logger
 import geotrellis.raster
 import geotrellis.raster.Tile
-import geotrellis.raster.mapalgebra.local.{Defined, InverseMask => gtInverseMask, Mask => gtMask}
+import geotrellis.raster.mapalgebra.local.{Undefined, InverseMask ⇒ gtInverseMask, Mask ⇒ gtMask}
 import org.apache.spark.sql.catalyst.analysis.TypeCheckResult
 import org.apache.spark.sql.catalyst.analysis.TypeCheckResult.{TypeCheckFailure, TypeCheckSuccess}
 import org.apache.spark.sql.catalyst.expressions.codegen.CodegenFallback
@@ -35,47 +32,71 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, ExpressionDescript
 import org.apache.spark.sql.rf.TileUDT
 import org.apache.spark.sql.types.DataType
 import org.apache.spark.sql.{Column, TypedColumn}
+import org.locationtech.rasterframes.encoders.CatalystSerializer._
+import org.locationtech.rasterframes.expressions.DynamicExtractors._
+import org.locationtech.rasterframes.expressions.localops.IsIn
+import org.locationtech.rasterframes.expressions.row
+import org.slf4j.LoggerFactory
 
-abstract class Mask(val left: Expression, val middle: Expression, val right: Expression, inverse: Boolean)
-  extends TernaryExpression with CodegenFallback with Serializable with LazyLogging {
+/** Convert cells in the `left` to NoData based on another tile's contents
+  *
+  * @param left a tile of data values, with valid nodata cell type
+  * @param middle a tile indicating locations to set to nodata
+  * @param right optional, cell values in the `middle` tile indicating locations to set NoData
+  * @param undefined if true, consider NoData in the `middle` as the locations to mask; else use `right` valued cells
+  * @param inverse if true, and defined is true, set `left` to NoData where `middle` is NOT nodata
+  */
+abstract class Mask(val left: Expression, val middle: Expression, val right: Expression, undefined: Boolean, inverse: Boolean)
+  extends TernaryExpression with CodegenFallback with Serializable {
+  // aliases.
+  def targetExp = left
+  def maskExp = middle
+  def maskValueExp = right
+
+  @transient protected lazy val logger = Logger(LoggerFactory.getLogger(getClass.getName))
 
   override def children: Seq[Expression] = Seq(left, middle, right)
 
   override def checkInputDataTypes(): TypeCheckResult = {
-    if (!tileExtractor.isDefinedAt(left.dataType)) {
-      TypeCheckFailure(s"Input type '${left.dataType}' does not conform to a raster type.")
-    } else if (!tileExtractor.isDefinedAt(middle.dataType)) {
-      TypeCheckFailure(s"Input type '${middle.dataType}' does not conform to a raster type.")
-    } else if (!intArgExtractor.isDefinedAt(right.dataType)) {
-      TypeCheckFailure(s"Input type '${right.dataType}' isn't an integral type.")
+    if (!tileExtractor.isDefinedAt(targetExp.dataType)) {
+      TypeCheckFailure(s"Input type '${targetExp.dataType}' does not conform to a raster type.")
+    } else if (!tileExtractor.isDefinedAt(maskExp.dataType)) {
+      TypeCheckFailure(s"Input type '${maskExp.dataType}' does not conform to a raster type.")
+    } else if (!intArgExtractor.isDefinedAt(maskValueExp.dataType)) {
+      TypeCheckFailure(s"Input type '${maskValueExp.dataType}' isn't an integral type.")
     } else TypeCheckSuccess
   }
   override def dataType: DataType = left.dataType
 
-  override protected def nullSafeEval(leftInput: Any, middleInput: Any, rightInput: Any): Any = {
-    implicit val tileSer = TileUDT.tileSerializer
-    val (leftTile, leftCtx) = tileExtractor(left.dataType)(row(leftInput))
-    val (rightTile, rightCtx) = tileExtractor(middle.dataType)(row(middleInput))
+  override def makeCopy(newArgs: Array[AnyRef]): Expression = super.makeCopy(newArgs)
 
-    if (leftCtx.isEmpty && rightCtx.isDefined)
+  override protected def nullSafeEval(targetInput: Any, maskInput: Any, maskValueInput: Any): Any = {
+    implicit val tileSer = TileUDT.tileSerializer
+    val (targetTile, targetCtx) = tileExtractor(targetExp.dataType)(row(targetInput))
+    val (maskTile, maskCtx) = tileExtractor(maskExp.dataType)(row(maskInput))
+
+    if (targetCtx.isEmpty && maskCtx.isDefined)
       logger.warn(
           s"Right-hand parameter '${middle}' provided an extent and CRS, but the left-hand parameter " +
             s"'${left}' didn't have any. Because the left-hand side defines output type, the right-hand context will be lost.")
 
-    if (leftCtx.isDefined && rightCtx.isDefined && leftCtx != rightCtx)
+    if (targetCtx.isDefined && maskCtx.isDefined && targetCtx != maskCtx)
       logger.warn(s"Both '${left}' and '${middle}' provided an extent and CRS, but they are different. Left-hand side will be used.")
 
-    val maskValue = intArgExtractor(right.dataType)(rightInput)
+    val maskValue = intArgExtractor(maskValueExp.dataType)(maskValueInput)
 
-    val masking = if (maskValue.value == 0) Defined(rightTile)
-    else rightTile
+    // Get a tile where values of 1 indicate locations to set to ND in the target tile
+    // When `undefined` is true, setting targetTile locations to ND for ND locations of the `maskTile`
+    val masking = if (undefined) Undefined(maskTile)
+    else maskTile.localEqual(maskValue.value) // Otherwise if `maskTile` locations equal `maskValue`, set location to ND
 
+    // apply the `masking` where values are 1 set to ND (possibly inverted!)
     val result = if (inverse)
-      gtInverseMask(leftTile, masking, maskValue.value, raster.NODATA)
+      gtInverseMask(targetTile, masking, 1, raster.NODATA)
     else
-      gtMask(leftTile, masking, maskValue.value, raster.NODATA)
+      gtMask(targetTile, masking, 1, raster.NODATA)
 
-    leftCtx match {
+    targetCtx match {
       case Some(ctx) => ctx.toProjectRasterTile(result).toInternalRow
       case None      => result.toInternalRow
     }
@@ -96,7 +117,7 @@ object Mask {
        ..."""
   )
   case class MaskByDefined(target: Expression, mask: Expression)
-    extends Mask(target, mask, Literal(0), false) {
+    extends Mask(target, mask, Literal(0), true, false) {
     override def nodeName: String = "rf_mask"
   }
   object MaskByDefined {
@@ -116,7 +137,7 @@ object Mask {
        ..."""
   )
   case class InverseMaskByDefined(leftTile: Expression, rightTile: Expression)
-    extends Mask(leftTile, rightTile, Literal(0), true) {
+    extends Mask(leftTile, rightTile, Literal(0), true, true) {
     override def nodeName: String = "rf_inverse_mask"
   }
   object InverseMaskByDefined {
@@ -136,7 +157,7 @@ object Mask {
        ..."""
   )
   case class MaskByValue(leftTile: Expression, rightTile: Expression, maskValue: Expression)
-    extends Mask(leftTile, rightTile, maskValue, false) {
+    extends Mask(leftTile, rightTile, maskValue, false, false) {
     override def nodeName: String = "rf_mask_by_value"
   }
   object MaskByValue {
@@ -158,11 +179,35 @@ object Mask {
        ..."""
   )
   case class InverseMaskByValue(leftTile: Expression, rightTile: Expression, maskValue: Expression)
-    extends Mask(leftTile, rightTile, maskValue, true) {
+    extends Mask(leftTile, rightTile, maskValue, false, true) {
     override def nodeName: String = "rf_inverse_mask_by_value"
   }
   object InverseMaskByValue {
     def apply(srcTile: Column, maskingTile: Column, maskValue: Column): TypedColumn[Any, Tile] =
       new Column(InverseMaskByValue(srcTile.expr, maskingTile.expr, maskValue.expr)).as[Tile]
+  }
+
+  @ExpressionDescription(
+    usage = "_FUNC_(data, mask, maskValues) - Generate a tile with the values from `data` tile but where cells in the `mask` tile are in the `maskValues` list, replace the value with NODATA.",
+    arguments = """
+  Arguments:
+    * target - tile to mask
+    * mask - masking definition
+    * maskValues - sequence of values to consider as masks candidates
+        """,
+    examples = """
+  Examples:
+    > SELECT _FUNC_(data, mask, array(1, 2, 3))
+      ..."""
+  )
+  case class MaskByValues(dataTile: Expression, maskTile: Expression)
+    extends Mask(dataTile, maskTile, Literal(1), false, false) {
+    def this(dataTile: Expression, maskTile: Expression, maskValues: Expression) =
+      this(dataTile, IsIn(maskTile, maskValues))
+    override def nodeName: String = "rf_mask_by_values"
+  }
+  object MaskByValues {
+    def apply(dataTile: Column, maskTile: Column, maskValues: Column): TypedColumn[Any, Tile] =
+      new Column(MaskByValues(dataTile.expr, IsIn(maskTile, maskValues).expr)).as[Tile]
   }
 }
