@@ -1,5 +1,5 @@
 // Internal Astraea-specific overides
-ThisBuild / version := "0.8.3-astraea-SNAPSHOT"
+ThisBuild / version := "0.9.0-astraea"
 ThisBuild / credentials += Credentials(Path.userHome / ".sbt" / ".credentials")
 publishTo := {
   val base = "https://s22s.mycloudrepo.io/repositories"
@@ -9,7 +9,7 @@ publishTo := {
     Some("Astraea Internal Releases" at s"$base/releases/")
 }
 
-// Coudn't figure out why we have to call all these out explicitly.
+// Couldn't figure out why we have to call all these out explicitly.
 // The above should have been sufficient based on my understanding of
 // the precidence rules in sbt.
 LocalProject("core") / publishTo := publishTo.value
