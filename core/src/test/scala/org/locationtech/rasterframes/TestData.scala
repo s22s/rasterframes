@@ -31,14 +31,15 @@ import geotrellis.raster._
 import geotrellis.raster.io.geotiff.{MultibandGeoTiff, SinglebandGeoTiff}
 import geotrellis.spark._
 import geotrellis.spark.testkit.TileLayerRDDBuilders
-import geotrellis.spark.tiling.LayoutDefinition
-import geotrellis.vector.{Extent, ProjectedExtent}
+import geotrellis.layer._
+import geotrellis.vector._
+import geotrellis.vector.io.json.JsonFeatureCollection
 import org.apache.commons.io.IOUtils
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.SparkSession
 import org.locationtech.jts.geom.{Coordinate, GeometryFactory}
 import org.locationtech.rasterframes.expressions.tilestats.NoDataCells
-import org.locationtech.rasterframes.ref.{RasterRef, RasterSource}
+import org.locationtech.rasterframes.ref.{RasterRef, RFRasterSource}
 import org.locationtech.rasterframes.tiles.ProjectedRasterTile
 
 import scala.reflect.ClassTag
@@ -160,8 +161,6 @@ trait TestData {
   lazy val l8samplePath: URI = getClass.getResource("/L8-B1-Elkton-VA.tiff").toURI
   lazy val modisConvertedMrfPath: URI = getClass.getResource("/MCD43A4.A2019111.h30v06.006.2019120033434_01.mrf").toURI
 
-
-
   lazy val zero = TestData.projectedRasterTile(cols, rows, 0, extent, crs, ct)
   lazy val one = TestData.projectedRasterTile(cols, rows, 1, extent, crs, ct)
   lazy val two = TestData.projectedRasterTile(cols, rows, 2, extent, crs, ct)
@@ -181,7 +180,9 @@ trait TestData {
     TestData.randomTile(cols, rows, UByteConstantNoDataCellType)
   )).map(ProjectedRasterTile(_, extent, crs)) :+ null
 
-  def lazyPRT = RasterRef(RasterSource(TestData.l8samplePath), 0, None, None).tile
+  def rasterRef = RasterRef(RFRasterSource(TestData.l8samplePath), 0, None, None)
+  def lazyPRT = rasterRef.tile
+
 
   object GeomData {
     val fact = new GeometryFactory()
@@ -202,13 +203,8 @@ trait TestData {
         .getResource("/L8-Labels-Elkton-VA.geojson").toURI)
       Files.readAllLines(p).mkString("\n")
     }
-    lazy val features = {
-      import geotrellis.vector.io._
-      import geotrellis.vector.io.json.JsonFeatureCollection
-      import spray.json.DefaultJsonProtocol._
-      import spray.json._
-      GeomData.geoJson.parseGeoJson[JsonFeatureCollection].getAllPolygonFeatures[JsObject]()
-    }
+    lazy val features = GeomData.geoJson.parseGeoJson[JsonFeatureCollection]
+      .getAllPolygonFeatures[_root_.io.circe.JsonObject]()
   }
 }
 

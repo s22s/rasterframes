@@ -24,18 +24,18 @@ import java.nio.ByteBuffer
 
 import geotrellis.proj4.CRS
 import geotrellis.raster.{CellType, MultibandTile}
-import geotrellis.spark.io._
-import geotrellis.spark.{ContextRDD, MultibandTileLayerRDD, SpaceTimeKey, SpatialKey, TileLayerMetadata}
+import geotrellis.spark._
+import geotrellis.layer._
 import geotrellis.vector.Extent
 import org.apache.spark.sql._
 import org.locationtech.rasterframes
 import org.locationtech.rasterframes.extensions.RasterJoin
 import org.locationtech.rasterframes.model.LazyCRS
-import org.locationtech.rasterframes.ref.{GDALRasterSource, RasterRef, RasterSource}
+import org.locationtech.rasterframes.ref.{GDALRasterSource, RasterRef, RFRasterSource}
 import org.locationtech.rasterframes.util.KryoSupport
 import org.locationtech.rasterframes.{RasterFunctions, _}
 import spray.json._
-
+import org.locationtech.rasterframes.util.JsonCodecs._
 import scala.collection.JavaConverters._
 
 /**
@@ -191,6 +191,13 @@ class PyRFContext(implicit sparkSession: SparkSession) extends RasterFunctions
 
   def rf_local_unequal_int(col: Column, scalar: Int): Column = rf_local_unequal[Int](col, scalar)
 
+  // other function support
+  /** py4j friendly version of this function */
+  def rf_agg_approx_quantiles(tile: Column, probabilities: java.util.List[Double], relativeError: Double): TypedColumn[Any, Seq[Double]] = {
+    import scala.collection.JavaConverters._
+    rf_agg_approx_quantiles(tile, probabilities.asScala, relativeError)
+  }
+
   def _make_crs_literal(crsText: String): Column = {
     rasterframes.encoders.serialized_literal[CRS](LazyCRS(crsText))
   }
@@ -226,7 +233,7 @@ class PyRFContext(implicit sparkSession: SparkSession) extends RasterFunctions
   type jDouble = java.lang.Double
   // NB: Tightly coupled to the `RFContext.resolve_raster_ref` method in `pyrasterframes.rf_context`. */
   def _resolveRasterRef(srcBin: Array[Byte], bandIndex: jInt, xmin: jDouble, ymin: jDouble, xmax: jDouble, ymax: jDouble): AnyRef = {
-    val src = KryoSupport.deserialize[RasterSource](ByteBuffer.wrap(srcBin))
+    val src = KryoSupport.deserialize[RFRasterSource](ByteBuffer.wrap(srcBin))
     val extent = Extent(xmin, ymin, xmax, ymax)
     RasterRef(src, bandIndex, Some(extent), None)
   }
@@ -240,4 +247,7 @@ class PyRFContext(implicit sparkSession: SparkSession) extends RasterFunctions
     import rasterframes.util.DFWithPrettyPrint
     df.toHTML(numRows, truncate, renderTiles = true)
   }
+
+  def _reprojectExtent(extent: Extent, srcCRS: String, destCRS: String): Extent =
+    extent.reproject(LazyCRS(srcCRS), LazyCRS(destCRS))
 }

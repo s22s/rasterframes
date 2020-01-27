@@ -1,5 +1,30 @@
 # Release Notes
 
+## 0.9.x
+
+### 0.9.0
+
+* Upgraded to GeoTrellis 3.2.0. This includes a number of _breaking_ changes enumerated as a part of the [PR's](https://github.com/locationtech/rasterframes/pull/398) change log. These include:
+  - Add `Int` type parameter to `Grid`
+  - Add `Int` type parameter to `CellGrid`
+  - Add `Int` type parameter to `GridBounds`... or `TileBounds`
+  - Use `GridBounds.toGridType` to coerce from `Int` to `Long` type parameter
+  - Update imports for layers, particularly `geotrellis.spark.tiling` to `geotrellis.layer`
+  - Update imports for `geotrellis.spark.io` to `geotrellis.spark.store...`
+  - Removed `FixedRasterExtent`
+  - Removed `org.locationtech.rasterframes.util.Shims`
+  - Change `Extent.jtsGeom` to `Extent.toPolygon`
+  - Change `TileLayerMetadata.gridBounds` to `TileLayerMetadata.tileBounds`
+  - Add `geotrellis-gdal` dependency
+  - Remove any conversions between JTS geometry and old `geotrellis.vector` geometry
+  - Changed `org.locationtech.rasterframes.encoders.StandardEncoders.crsEncoder` to `crsSparkEncoder`
+  - Change `(cols, rows)` dimension destructuring to `Dimensions(cols, rows)`
+  - Revisit use of `Tile` equality since [it's more strict](https://github.com/locationtech/geotrellis/pull/2991)
+  - Update `reference.conf` to use `geotrellis.raster.gdal` namespace.
+  - Replace all uses of `TileDimensions` with `geotrellis.raster.Dimensions[Int]`.
+* Formally abandoned support for Python 2. Python 2 is dead. Long live Python 2.
+* Introduction of type hints in Python API. 
+
 ## 0.8.x
 
 ### 0.8.5
@@ -8,6 +33,13 @@
 * _Breaking_: `rf_spatial_index` renamed `rf_xz2_index` to differentiate between XZ2 and Z2 variants.
 * Added `withSpatialIndex` to RasterSourceDataSource to pre-partition tiles based on tile extents mapped to a Z2 space-filling curve 
 * Add `rf_mask_by_bit`, `rf_mask_by_bits` and `rf_local_extract_bits` to deal with bit packed quality masks. Updated the masking documentation to demonstrate the use of these functions.
+* Added `toDF` extension method to `MultibandGeoTiff`
+* Added `rf_agg_extent` and `rf_agg_reprojected_extent` to compute the aggregate extent of a column
+* Added `rf_proj_raster` for constructing a `proj_raster` structure from individual CRS, Extent, and Tile columns.
+* Added `rf_render_color_ramp_png` to compute PNG byte array for a single tile column, with specified color ramp.
+* In `rf_ipython`, improved rendering of dataframe binary contents with PNG preamble.
+* Throw an `IllegalArgumentException` when attempting to apply a mask to a `Tile` whose `CellType` has no NoData defined. ([#409](https://github.com/locationtech/rasterframes/issues/384))
+* Add `rf_agg_approx_quantiles` function to compute cell quantiles across an entire column.
 
 ### 0.8.4
 

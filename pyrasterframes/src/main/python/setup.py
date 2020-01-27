@@ -57,7 +57,6 @@ class PweaveDocs(distutils.cmd.Command):
         ('quick=', 'q', 'Check to see if the source file is newer than existing output before building. Defaults to `False`.')
     ]
 
-
     def initialize_options(self):
         """Set default values for options."""
         # Each user option must be listed here with their default value.
@@ -149,6 +148,7 @@ folium = 'folium'
 pytest = 'pytest>=4.0.0,<5.0.0'
 pypandoc = 'pypandoc'
 boto3 = 'boto3'
+deprecation = 'deprecation'
 
 setup(
     name='pyrasterframes',
@@ -170,7 +170,8 @@ setup(
         shapely,
         pyspark,
         numpy,
-        pandas
+        pandas,
+        deprecation,
     ],
     setup_requires=[
         pytz,
@@ -188,7 +189,7 @@ setup(
         pweave,
         fiona,
         rasterio,
-        folium
+        folium,
     ],
     tests_require=[
         pytest,
@@ -218,7 +219,7 @@ setup(
         'License :: OSI Approved :: Apache Software License',
         'Natural Language :: English',
         'Operating System :: Unix',
-        'Programming Language :: Python',
+        'Programming Language :: Python :: 3',
         'Topic :: Software Development :: Libraries',
         'Topic :: Scientific/Engineering :: GIS',
         'Topic :: Multimedia :: Graphics :: Graphics Conversion',

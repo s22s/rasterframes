@@ -19,17 +19,24 @@
 #
 
 import pyrasterframes.rf_types
+from pyrasterframes.rf_types import Tile
 from shapely.geometry.base import BaseGeometry
-
+from matplotlib.axes import Axes
 import numpy as np
+from pandas import DataFrame
+from typing import Optional, Tuple
+
+_png_header = bytearray([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
 
 
-def plot_tile(tile, normalize=True, lower_percentile=1, upper_percentile=99, axis=None, **imshow_args):
+def plot_tile(tile: Tile, normalize: bool = True, lower_percentile: float = 1., upper_percentile: float = 99.,
+              axis: Optional[Axes] = None, **imshow_args):
     """
     Display an image of the tile
 
     Parameters
     ----------
+    tile: item to plot
     normalize: if True, will normalize the data between using
                lower_percentile and upper_percentile as bounds
     lower_percentile: between 0 and 100 inclusive.
@@ -50,7 +57,7 @@ def plot_tile(tile, normalize=True, lower_percentile=1, upper_percentile=99, axi
 
     arr = tile.cells
 
-    def normalize_cells(cells):
+    def normalize_cells(cells: np.ndarray) -> np.ndarray:
         assert upper_percentile > lower_percentile, 'invalid upper and lower percentiles {}, {}'.format(lower_percentile, upper_percentile)
         sans_mask = np.array(cells)
         lower = np.nanpercentile(sans_mask, lower_percentile)
@@ -72,7 +79,8 @@ def plot_tile(tile, normalize=True, lower_percentile=1, upper_percentile=99, axi
     return axis
 
 
-def tile_to_png(tile, lower_percentile=1, upper_percentile=99, title=None, fig_size=None):
+def tile_to_png(tile: Tile, lower_percentile: float = 1., upper_percentile: float = 99., title: Optional[str] = None,
+                fig_size: Optional[Tuple[int, int]] = None) -> bytes:
     """ Provide image of Tile."""
     if tile.cells is None:
         return None
@@ -106,7 +114,7 @@ def tile_to_png(tile, lower_percentile=1, upper_percentile=99, title=None, fig_s
         return output.getvalue()
 
 
-def tile_to_html(tile, fig_size=None):
+def tile_to_html(tile: Tile, fig_size: Optional[Tuple[int, int]] = None) -> str:
     """ Provide HTML string representation of Tile image."""
     import base64
     b64_img_html = '<img src="data:image/png;base64,{}" />'
@@ -115,7 +123,20 @@ def tile_to_html(tile, fig_size=None):
     return b64_img_html.format(b64_png)
 
 
-def pandas_df_to_html(df):
+def binary_to_html(blob):
+    """ When using rf_render_png, the result from the JVM is a byte string with special PNG header
+        Look for this header and return base64 encoded HTML for Jupyter display
+    """
+    import base64
+    if blob[:8] == _png_header:
+        b64_img_html = '<img src="data:image/png;base64,{}" />'
+        b64_png = base64.b64encode(blob).decode('utf-8').replace('\n', '')
+        return b64_img_html.format(b64_png)
+    else:
+        return blob
+
+
+def pandas_df_to_html(df: DataFrame) -> str:
     """Provide HTML formatting for pandas.DataFrame with rf_types.Tile in the columns.  """
     import pandas as pd
     # honor the existing options on display
@@ -129,11 +150,14 @@ def pandas_df_to_html(df):
 
     tile_cols = []
     geom_cols = []
+    bytearray_cols = []
     for c in df.columns:
         if isinstance(df.iloc[0][c], pyrasterframes.rf_types.Tile):  # if the first is a Tile try formatting
             tile_cols.append(c)
         elif isinstance(df.iloc[0][c], BaseGeometry):  # if the first is a Geometry try formatting
             geom_cols.append(c)
+        elif isinstance(df.iloc[0][c], bytearray):
+            bytearray_cols.append(c)
 
     def _safe_tile_to_html(t):
         if isinstance(t, pyrasterframes.rf_types.Tile):
@@ -152,9 +176,16 @@ def pandas_df_to_html(df):
         else:
             return g.__repr__()
 
+    def _safe_bytearray_to_html(b):
+        if isinstance(b, bytearray):
+            return binary_to_html(b)
+        else:
+            return b.__repr__()
+
     # dict keyed by column with custom rendering function
     formatter = {c: _safe_tile_to_html for c in tile_cols}
     formatter.update({c: _safe_geom_to_html for c in geom_cols})
+    formatter.update({c: _safe_bytearray_to_html for c in bytearray_cols})
 
     # This is needed to avoid our tile being rendered as `<img src="only up to fifty char...`
     pd.set_option('display.max_colwidth', -1)
@@ -170,17 +201,17 @@ def pandas_df_to_html(df):
     return return_html
 
 
-def spark_df_to_markdown(df, num_rows=5, truncate=False):
+def spark_df_to_markdown(df: DataFrame, num_rows: int = 5, truncate: bool = False) -> str:
     from pyrasterframes import RFContext
     return RFContext.active().call("_dfToMarkdown", df._jdf, num_rows, truncate)
 
 
-def spark_df_to_html(df, num_rows=5, truncate=False):
+def spark_df_to_html(df: DataFrame, num_rows: int = 5, truncate: bool = False) -> str:
     from pyrasterframes import RFContext
     return RFContext.active().call("_dfToHTML", df._jdf, num_rows, truncate)
 
 
-def _folium_map_formatter(map):
+def _folium_map_formatter(map) -> str:
     """ inputs a folium.Map object and returns html of rendered map """
     
     import base64

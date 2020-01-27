@@ -22,7 +22,7 @@
 package org.locationtech.rasterframes.expressions
 
 import geotrellis.proj4.CRS
-import geotrellis.raster.{CellGrid, Tile}
+import geotrellis.raster.{CellGrid, Raster, Tile}
 import geotrellis.vector.Extent
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
@@ -33,7 +33,7 @@ import org.apache.spark.unsafe.types.UTF8String
 import org.locationtech.jts.geom.{Envelope, Point}
 import org.locationtech.rasterframes.encoders.CatalystSerializer._
 import org.locationtech.rasterframes.model.{LazyCRS, TileContext}
-import org.locationtech.rasterframes.ref.{ProjectedRasterLike, RasterRef, RasterSource}
+import org.locationtech.rasterframes.ref.{ProjectedRasterLike, RasterRef, RFRasterSource}
 import org.locationtech.rasterframes.tiles.ProjectedRasterTile
 
 private[rasterframes]
@@ -61,6 +61,11 @@ object DynamicExtractors {
   lazy val rowTileExtractor: PartialFunction[DataType, Row => (Tile, Option[TileContext])] = {
     case _: TileUDT =>
       (row: Row) =>  (row.to[Tile](TileUDT.tileSerializer), None)
+    case t if t.conformsTo[Raster[Tile]] =>
+      (row: Row) => {
+        val rt = row.to[Raster[Tile]]
+        (rt.tile, None)
+      }
     case t if t.conformsTo[ProjectedRasterTile] =>
       (row: Row) => {
         val prt = row.to[ProjectedRasterTile]
@@ -71,7 +76,7 @@ object DynamicExtractors {
   /** Partial function for pulling a ProjectedRasterLike an input row. */
   lazy val projectedRasterLikeExtractor: PartialFunction[DataType, Any ⇒ ProjectedRasterLike] = {
     case _: RasterSourceUDT ⇒
-      (input: Any) => input.asInstanceOf[InternalRow].to[RasterSource](RasterSourceUDT.rasterSourceSerializer)
+      (input: Any) => input.asInstanceOf[InternalRow].to[RFRasterSource](RasterSourceUDT.rasterSourceSerializer)
     case t if t.conformsTo[ProjectedRasterTile] =>
       (input: Any) => input.asInstanceOf[InternalRow].to[ProjectedRasterTile]
     case t if t.conformsTo[RasterRef] =>
@@ -79,11 +84,11 @@ object DynamicExtractors {
   }
 
   /** Partial function for pulling a CellGrid from an input row. */
-  lazy val gridExtractor: PartialFunction[DataType, InternalRow ⇒ CellGrid] = {
+  lazy val gridExtractor: PartialFunction[DataType, InternalRow ⇒ CellGrid[Int]] = {
     case _: TileUDT =>
       (row: InternalRow) => row.to[Tile](TileUDT.tileSerializer)
     case _: RasterSourceUDT =>
-      (row: InternalRow) => row.to[RasterSource](RasterSourceUDT.rasterSourceSerializer)
+      (row: InternalRow) => row.to[RFRasterSource](RasterSourceUDT.rasterSourceSerializer)
     case t if t.conformsTo[RasterRef] ⇒
       (row: InternalRow) => row.to[RasterRef]
     case t if t.conformsTo[ProjectedRasterTile] =>
@@ -126,7 +131,7 @@ object DynamicExtractors {
   }
 
   lazy val centroidExtractor: PartialFunction[DataType, Any ⇒ Point] = {
-    extentExtractor.andThen(_.andThen(_.center.jtsGeom))
+    extentExtractor.andThen(_.andThen(_.center))
   }
 
   sealed trait TileOrNumberArg
@@ -153,8 +158,7 @@ object DynamicExtractors {
     case _: DoubleType | _: FloatType | _: DecimalType => {
       case d: Double  => DoubleArg(d)
       case f: Float   => DoubleArg(f.toDouble)
-      case d: Decimal => DoubleArg(d.toDouble)
-    }
+      case d: Decimal => DoubleArg(d.toDouble)    }
   }
 
   lazy val intArgExtractor: PartialFunction[DataType, Any => IntegerArg] = {
