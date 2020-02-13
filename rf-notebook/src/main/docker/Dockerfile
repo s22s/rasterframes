@@ -53,6 +53,8 @@ COPY examples $HOME/examples
 RUN ls -1 $RF_LIB_LOC/*.whl | xargs pip install --no-cache-dir
 RUN chmod -R +w $HOME/examples && chown -R $NB_UID:$NB_GID $HOME
 
+ENV PROJ_LIB=/opt/conda/share/proj
+
 USER $NB_UID
 
 EXPOSE 4040 4041 4042 4043 4044
