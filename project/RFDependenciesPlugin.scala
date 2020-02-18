@@ -71,10 +71,10 @@ object RFDependenciesPlugin extends AutoPlugin {
         case _ => deps :+ "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.6.7"
       }
     },
-    dependencyOverrides += {
-      "com.azavea.gdal" % "gdal-warp-bindings" % "1.0-astraea.1"
-    },
-    libraryDependencies += "com.azavea.gdal" % "gdal-warp-bindings" % "1.0-astraea.1" from("file:/Users/sfitch/Coding/earthai/gdalwarp.jar"),
+//    dependencyOverrides += {
+//      "com.azavea.gdal" % "gdal-warp-bindings" % "1.0-astraea.1"
+//    },
+//    libraryDependencies += "com.azavea.gdal" % "gdal-warp-bindings" % "1.0-astraea.1" from("file:/Users/sfitch/Coding/earthai/gdalwarp.jar"),
     // NB: Make sure to update the Spark version in pyrasterframes/python/setup.py
     rfSparkVersion := "2.4.4",
     rfGeoTrellisVersion := "3.2.1-astraea",
