@@ -1,5 +1,8 @@
+import com.typesafe.sbt.git.DefaultReadableGit
+
 // Internal Astraea-specific overides
-ThisBuild / version := "0.9.0-astraea"
+val sha = new DefaultReadableGit(file(".")).withGit(_.headCommitSha)
+ThisBuild / version := "0.9.0-astraea+" + sha.map(_.take(7)).getOrElse("0000000")
 ThisBuild / credentials += Credentials(Path.userHome / ".sbt" / ".credentials")
 publishTo := {
   val base = "https://s22s.mycloudrepo.io/repositories"
