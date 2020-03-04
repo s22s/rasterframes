@@ -20,18 +20,21 @@
 
 # Always prefer setuptools over distutils
 from setuptools import setup
-from os import path
+from os import path, environ, mkdir
 import sys
 from glob import glob
 from io import open
 import distutils.cmd
 
 try:
+    enver = environ.get('RASTERFRAMES_VERSION')
+    if enver is not None:
+        open('pyrasterframes/version.py', mode="w").write(f"__version__: str = '{enver}'\n")
     exec(open('pyrasterframes/version.py').read())  # executable python script contains __version__; credit pyspark
-except IOError:
-    print("Run setup via `sbt 'pySetup arg1 arg2'` to ensure correct access to all source files and binaries.")
+except IOError as e:
+    print(e)
+    print("Try running setup via `sbt 'pySetup arg1 arg2'` to ensure correct access to all source files and binaries.")
     sys.exit(-1)
-
 
 VERSION = __version__
 
@@ -142,6 +145,7 @@ setuptools = 'setuptools>=0.8'
 ipython = 'ipython==6.2.1'
 ipykernel = 'ipykernel==4.8.0'
 pweave = 'Pweave==0.30.3'
+jupyter_client = 'jupyter-client<6.0'  # v6 breaks pweave
 fiona = 'fiona==1.8.6'
 rasterio = 'rasterio>=1.0.0'
 folium = 'folium'
@@ -187,6 +191,7 @@ setup(
         ipython,
         ipykernel,
         pweave,
+        jupyter_client,
         fiona,
         rasterio,
         folium,

@@ -52,7 +52,6 @@ object RFDependenciesPlugin extends AutoPlugin {
 
   override def projectSettings = Seq(
     resolvers ++= Seq(
-      "Astraea Private Builds" at "https://s22s.mycloudrepo.io/repositories/releases",
       "Azavea Public Builds" at "https://dl.bintray.com/azavea/geotrellis",
       "locationtech-releases" at "https://repo.locationtech.org/content/groups/releases",
       "boundless-releases" at "https://repo.boundlessgeo.com/main/",
@@ -72,13 +71,10 @@ object RFDependenciesPlugin extends AutoPlugin {
         case _ => deps :+ "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.6.7"
       }
     },
-//    dependencyOverrides += {
-//      "com.azavea.gdal" % "gdal-warp-bindings" % "1.0-astraea.1"
-//    },
-//    libraryDependencies += "com.azavea.gdal" % "gdal-warp-bindings" % "1.0-astraea.1" from("file:/Users/sfitch/Coding/earthai/gdalwarp.jar"),
+    dependencyOverrides += "com.azavea.gdal" % "gdal-warp-bindings" % "33.f746890",
     // NB: Make sure to update the Spark version in pyrasterframes/python/setup.py
     rfSparkVersion := "2.4.4",
-    rfGeoTrellisVersion := "3.2.1-astraea",
+    rfGeoTrellisVersion := "3.2.0",
     rfGeoMesaVersion := "2.2.1"
   )
 }
