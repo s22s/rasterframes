@@ -1,7 +1,7 @@
 FROM circleci/openjdk:8-jdk
 
 ENV OPENJPEG_VERSION 2.3.1
-ENV GDAL_VERSION 2.4.1
+ENV GDAL_VERSION 2.4.4
 ENV SPATIALINDEX_VERSION 1.9.3
 ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64/
 
