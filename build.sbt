@@ -34,7 +34,8 @@ lazy val root = project
   .enablePlugins(RFReleasePlugin)
   .settings(
     publish / skip := true,
-    clean := clean.dependsOn(`rf-notebook`/clean, docs/clean).value
+    clean := clean.dependsOn(`rf-notebook`/clean, docs/clean).value,
+    crossScalaVersions := Nil,
   )
 
 lazy val `rf-notebook` = project

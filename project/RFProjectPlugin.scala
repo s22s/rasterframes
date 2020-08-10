@@ -11,6 +11,9 @@ object RFProjectPlugin extends AutoPlugin {
   override def trigger: PluginTrigger = allRequirements
   override def requires = GitPlugin
 
+  val scala212 = "2.12.12"
+  val scala211 = "2.11.12"
+
   override def projectSettings = Seq(
     organization := "org.locationtech.rasterframes",
     organizationName := "LocationTech RasterFrames",
@@ -20,7 +23,7 @@ object RFProjectPlugin extends AutoPlugin {
     scmInfo := Some(ScmInfo(url("https://github.com/locationtech/rasterframes"), "git@github.com:locationtech/rasterframes.git")),
     description := "RasterFrames brings the power of Spark DataFrames to geospatial raster data.",
     licenses += ("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0.html")),
-    scalaVersion := "2.11.12",
+    crossScalaVersions := Seq(scala211, scala212),
     scalacOptions ++= Seq(
       "-feature",
       "-deprecation",
@@ -40,32 +43,6 @@ object RFProjectPlugin extends AutoPlugin {
       "-XX:HeapDumpPath=/tmp"),
     parallelExecution in Test := false,
     testOptions in Test += Tests.Argument("-oDF"),
-    developers := List(
-      Developer(
-        id = "metasim",
-        name = "Simeon H.K. Fitch",
-        email = "fitch@astraea.earth",
-        url = url("http://www.astraea.earth")
-      ),
-      Developer(
-        id = "vpipkt",
-        name = "Jason Brown",
-        email = "jbrown@astraea.earth",
-        url = url("http://www.astraea.earth")
-      ),
-      Developer(
-        id = "mteldridge",
-        name = "Matt Eldridge",
-        email = "meldridge@astraea.earth",
-        url = url("http://www.astraea.earth")
-      ),
-      Developer(
-        id = "bguseman",
-        name = "Ben Guseman",
-        email = "bguseman@astraea.earth",
-        url = url("http://www.astraea.earth")
-      ),
-    ),
     initialCommands in console :=
       """
         |import org.apache.spark._
