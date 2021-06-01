@@ -113,5 +113,9 @@ object ProjectedRasterTile {
     }
   }
 
-  implicit val prtEncoder: ExpressionEncoder[ProjectedRasterTile] = CatalystSerializerEncoder[ProjectedRasterTile]()
+  val prtEncoder: ExpressionEncoder[ProjectedRasterTile] = CatalystSerializerEncoder[ProjectedRasterTile](false)
+
+  // Temporary... need to find a less dirty way of handling this
+  // Assumes that it will be pulled in implicitly when at a top level it's in a single column context
+  implicit val singleColumnPrtEncoder: ExpressionEncoder[ProjectedRasterTile] = CatalystSerializerEncoder[ProjectedRasterTile](true)
 }

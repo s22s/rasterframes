@@ -62,7 +62,7 @@ object CatalystSerializerEncoder {
     }
   }
 
-  def apply[T: TypeTag: CatalystSerializer](): ExpressionEncoder[T] = {
+  def apply[T: TypeTag: CatalystSerializer](keepUnary: Boolean = false): ExpressionEncoder[T] = {
     val serde = CatalystSerializer[T]
 
     val schema = serde.schema
@@ -80,9 +80,10 @@ object CatalystSerializerEncoder {
       If(IsNull(input), Literal.create(null, result.dataType), result)
     }
 
+    val wrapWrap = if (keepUnary) wrapValue(_) else identity[CreateNamedStruct](_)
 
     ExpressionEncoder(
-      wrap(serializer),
+      wrapWrap(wrap(serializer)),
       deserializer,
       typeToClassTag[T])
   }

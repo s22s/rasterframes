@@ -21,19 +21,12 @@
 
 package org.locationtech.rasterframes.encoders
 
-import cats.data
-
 import geotrellis.proj4._
-import geotrellis.raster.{CellSize, CellType, Dimensions, TileLayout, UShortUserDefinedNoDataCellType}
-import geotrellis.layer._
-import geotrellis.vector.{Extent, ProjectedExtent}
-import org.apache.spark.sql.{Dataset, Encoder, Row}
 import org.apache.spark.sql.catalyst.encoders.{ExpressionEncoder, encoderFor}
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, Expression, IsNull, KnownNotNull}
+import org.apache.spark.sql.catalyst.expressions.AttributeReference
 import org.apache.spark.sql.catalyst.plans.logical.LocalRelation
+import org.apache.spark.sql.{Dataset, Encoder, Encoders}
 import org.locationtech.rasterframes.{TestData, TestEnvironment}
-import org.locationtech.rasterframes.model.{CellContext, TileContext, TileDataContext}
-import org.scalatest.Assertion
 
 
 class DevSpec extends TestEnvironment {
@@ -90,11 +83,11 @@ class DevSpec extends TestEnvironment {
 
   describe("scalar tile operations") {
     import org.locationtech.rasterframes.tiles.ProjectedRasterTile
-
     import spark.implicits._
 
     ignore("=== DeSer for Time ===") {
       import org.apache.spark.sql.catalyst.ScalaReflection.deserializerForType
+
       import scala.reflect.runtime.universe._
 
       val de = deserializerForType(typeOf[java.sql.Timestamp])
@@ -105,6 +98,7 @@ class DevSpec extends TestEnvironment {
 
     ignore("=== DeSer for Person ===") {
       import org.apache.spark.sql.catalyst.ScalaReflection.deserializerForType
+
       import scala.reflect.runtime.universe._
 
       val de = deserializerForType(typeOf[Person])
@@ -152,6 +146,43 @@ class DevSpec extends TestEnvironment {
       val en = ProjectedRasterTile.prtEncoder
       info(en.objSerializer.treeString)
       info(en.deserializer.treeString)
+    }
+
+    it("should round trip Tuple2[Int, ProjectedRasterTile]") {
+      implicit val enc = Encoders.tuple(
+        implicitly[Encoder[Int]],
+        ProjectedRasterTile.prtEncoder
+      )
+      val data = Seq((1, one), (2, two))
+      val ds = data.toDS
+      val df = ds.toDF()
+
+      val indexedTile = df.as[(Int, ProjectedRasterTile)].first()
+      indexedTile should be (data.head)
+    }
+
+    it("should round trip Tuple1[ProjectedRasterTile]") {
+      implicit val enc = ExpressionEncoder.tuple(
+        ProjectedRasterTile.prtEncoder
+      )
+      val data = Seq(Tuple1(one), Tuple1(two))
+      val ds = data.toDS
+      val df = ds.toDF()
+
+      val tupledTile = df.as[Tuple1[ProjectedRasterTile]].first()
+      tupledTile should be (data.head)
+    }
+
+    it("should round trip Option[ProjectedRasterTile]") {
+      //import StandardEncoders.optionPrtEncoder
+      val data = Seq(Option(one), Option(two))
+      val ds = data.toDS
+      ds.printSchema()
+      ds.show()
+      val df = ds.toDF()
+
+      val tile = df.as[Option[ProjectedRasterTile]].first()
+      info(tile.toString)
     }
 
     it("should round trip ProjectedRasterTile") {
