@@ -68,7 +68,7 @@ package object geotrellis extends DataSourceOptions {
 
     def asLayer(layer: Layer): DataFrameWriter[T] =
       asLayer(layer.id)
-        .option("path", layer.base.toASCIIString)
+        .option("path", layer.base)
   }
 
   /** Extension methods for loading a RasterFrameLayer from a tagged `DataFrameReader`. */
@@ -88,6 +88,13 @@ package object geotrellis extends DataSourceOptions {
         .option(LAYER_PARAM, id.name)
         .option(ZOOM_PARAM, id.zoom.toString)
         .load(uri.toASCIIString)
+        .asLayer
+
+    def loadLayer(uriStr: String, id: LayerId): RasterFrameLayer =
+      reader
+        .option(LAYER_PARAM, id.name)
+        .option(ZOOM_PARAM, id.zoom.toString)
+        .load(uriStr)
         .asLayer
 
     def loadLayer(layer: Layer): RasterFrameLayer = loadLayer(layer.base, layer.id)

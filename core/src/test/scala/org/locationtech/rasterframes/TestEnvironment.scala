@@ -61,6 +61,8 @@ trait TestEnvironment extends AnyFunSpec
   implicit lazy val spark: SparkSession = {
     val session = SparkSession.builder
       .master(sparkMaster)
+      .config("spark.ui.enabled", false)
+      .config("spark.ui.showConsoleProgress", false)
       .withKryoSerialization
       .config(additionalConf)
       .getOrCreate()
