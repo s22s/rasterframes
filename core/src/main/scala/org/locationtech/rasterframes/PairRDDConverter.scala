@@ -26,10 +26,13 @@ import geotrellis.raster.{MultibandTile, Tile, TileFeature}
 import geotrellis.layer._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
+import org.apache.spark.sql.catalyst.ScalaReflection
 import org.apache.spark.sql.rf.TileUDT
 import org.apache.spark.sql.types._
+import org.locationtech.rasterframes.PairRDDConverter.RDDCanBeDataFrame
 
 import scala.annotation.implicitNotFound
+import org.locationtech.rasterframes.encoders.SparkBasicEncoders.product
 
 /**
  * Typeclass for converting a Pair RDD into a dataframe.
@@ -56,37 +59,40 @@ object PairRDDConverter {
   def apply[K, V](implicit sp: PairRDDConverter[K, V]) = sp
 
   /** Enables conversion of `RDD[(SpatialKey, Tile)]` to DataFrame. */
-  implicit val spatialTileConverter = new PairRDDConverter[SpatialKey, Tile] {
+  implicit val spatialTileConverter: PairRDDConverter[SpatialKey, Tile] = new PairRDDConverter[SpatialKey, Tile] {
+    val skSchema = ScalaReflection.schemaFor[SpatialKey].dataType
     val schema: StructType = {
       StructType(Seq(
-        StructField(SPATIAL_KEY_COLUMN.columnName, spatialKeyEncoder.schema, nullable = false),
+        StructField(SPATIAL_KEY_COLUMN.columnName, skSchema, nullable = false),
         StructField(TILE_COLUMN.columnName, serializableTileUDT, nullable = false)
       ))
     }
 
     def toDataFrame(rdd: RDD[(SpatialKey, Tile)])(implicit spark: SparkSession): DataFrame = {
-      import spark.implicits._
+      import spark.implicits.rddToDatasetHolder
       rdd.toDF(schema.fields.map(_.name): _*)
     }
   }
 
   /** Enables conversion of `RDD[(SpaceTimeKey, Tile)]` to DataFrame. */
-  implicit val spaceTimeTileConverter = new PairRDDConverter[SpaceTimeKey, Tile] {
+  implicit val spaceTimeTileConverter: PairRDDConverter[SpaceTimeKey, Tile] = new PairRDDConverter[SpaceTimeKey, Tile] {
     val schema: StructType = {
       val base = spatialTileConverter.schema
-      val addedFields = Seq(StructField(TEMPORAL_KEY_COLUMN.columnName, temporalKeyEncoder.schema, nullable = false))
+      val tkSchema = ScalaReflection.schemaFor[TemporalKey].dataType
+      val addedFields = Seq(StructField(TEMPORAL_KEY_COLUMN.columnName, tkSchema, nullable = false))
       StructType(base.fields.patch(1, addedFields, 0))
     }
 
     def toDataFrame(rdd: RDD[(SpaceTimeKey, Tile)])(implicit spark: SparkSession): DataFrame = {
-      import spark.implicits._
+      import spark.implicits.rddToDatasetHolder
       rdd.map{ case (k, v) ⇒ (k.spatialKey, k.temporalKey, v)}.toDF(schema.fields.map(_.name): _*)
     }
   }
 
   /** Enables conversion of `RDD[(SpatialKey, TileFeature[Tile, D])]` to DataFrame. */
-  implicit def spatialTileFeatureConverter[D: Encoder] = new PairRDDConverter[SpatialKey, TileFeature[Tile, D]] {
+  implicit def spatialTileFeatureConverter[D: Encoder]: PairRDDConverter[SpatialKey, TileFeature[Tile, D]] = new PairRDDConverter[SpatialKey, TileFeature[Tile, D]] {
     implicit val featureEncoder = implicitly[Encoder[D]]
+    implicit val spatialKeyEncoder = implicitly[Encoder[SpatialKey]]
     implicit val rowEncoder = Encoders.tuple(spatialKeyEncoder, singlebandTileEncoder, featureEncoder)
 
     val schema: StructType = {
@@ -101,8 +107,11 @@ object PairRDDConverter {
   }
 
   /** Enables conversion of `RDD[(SpaceTimeKey, TileFeature[Tile, D])]` to DataFrame. */
-  implicit def spaceTimeTileFeatureConverter[D: Encoder] = new PairRDDConverter[SpaceTimeKey, TileFeature[Tile, D]] {
+  implicit def spaceTimeTileFeatureConverter[D: Encoder]: PairRDDConverter[SpaceTimeKey, TileFeature[Tile, D]] = new PairRDDConverter[SpaceTimeKey, TileFeature[Tile, D]] {
     implicit val featureEncoder = implicitly[Encoder[D]]
+    implicit val spatialKeyEncoder = implicitly[Encoder[SpatialKey]]
+    implicit val temporalKeyEncoder = implicitly[Encoder[TemporalKey]]
+
     implicit val rowEncoder = Encoders.tuple(spatialKeyEncoder, temporalKeyEncoder, singlebandTileEncoder, featureEncoder)
 
     val schema: StructType = {
@@ -113,8 +122,6 @@ object PairRDDConverter {
     def toDataFrame(rdd: RDD[(SpaceTimeKey, TileFeature[Tile, D])])(implicit spark: SparkSession): DataFrame = {
       import spark.implicits._
       val tupRDD = rdd.map { case (k, v) ⇒ (k.spatialKey, k.temporalKey, v.tile, v.data) }
-
-      rddToDatasetHolder(tupRDD)
       tupRDD.toDF(schema.fields.map(_.name): _*)
     }
   }

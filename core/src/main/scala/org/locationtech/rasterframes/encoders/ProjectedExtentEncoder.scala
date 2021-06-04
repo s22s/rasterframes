@@ -22,7 +22,7 @@
 package org.locationtech.rasterframes.encoders
 
 import org.locationtech.rasterframes._
-import geotrellis.vector.ProjectedExtent
+import geotrellis.vector.{Extent, ProjectedExtent}
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 
 /**
@@ -32,6 +32,8 @@ import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
  */
 object ProjectedExtentEncoder {
   def apply(): ExpressionEncoder[ProjectedExtent] = {
+    import StandardEncoders.crsSparkEncoder
+    implicit val extentEncoder = ExpressionEncoder[Extent]()
     DelegatingSubfieldEncoder("extent" -> extentEncoder, "crs" -> crsSparkEncoder)
   }
 }

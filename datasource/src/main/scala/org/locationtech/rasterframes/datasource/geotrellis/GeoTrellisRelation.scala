@@ -25,7 +25,6 @@ import java.io.UnsupportedEncodingException
 import java.net.URI
 import java.sql.{Date, Timestamp}
 import java.time.{ZoneOffset, ZonedDateTime}
-
 import com.typesafe.scalalogging.Logger
 import geotrellis.layer.{Metadata => LMetadata, _}
 import geotrellis.raster.{CellGrid, MultibandTile, Tile, TileFeature}
@@ -38,7 +37,7 @@ import geotrellis.vector._
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
+import org.apache.spark.sql.catalyst.ScalaReflection
 import org.apache.spark.sql.rf.TileUDT
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
@@ -54,7 +53,7 @@ import org.locationtech.rasterframes.util.JsonCodecs._
 import org.locationtech.rasterframes.util.SubdivideSupport._
 import org.locationtech.rasterframes.util._
 import org.slf4j.LoggerFactory
-
+import org.locationtech.rasterframes.encoders.CatalystSerializer._
 import scala.reflect.ClassTag
 import scala.reflect.runtime.universe._
 
@@ -140,7 +139,7 @@ case class GeoTrellisRelation(sqlContext: SQLContext,
   }
 
   override def schema: StructType = {
-    val skSchema = ExpressionEncoder[SpatialKey]().schema
+    val skSchema = ScalaReflection.schemaFor[SpatialKey].dataType
 
     val skMetadata = subdividedTileLayerMetadata.
       fold(_.asColumnMetadata, _.asColumnMetadata) |>
@@ -148,7 +147,7 @@ case class GeoTrellisRelation(sqlContext: SQLContext,
 
     val keyFields = keyType match {
       case t if t =:= typeOf[SpaceTimeKey] ⇒
-        val tkSchema = ExpressionEncoder[TemporalKey]().schema
+        val tkSchema = ScalaReflection.schemaFor[TemporalKey].dataType
         val tkMetadata = Metadata.empty.append.tagTemporalKey.build
         List(
           StructField(C.SK, skSchema, nullable = false, skMetadata),
@@ -275,7 +274,7 @@ case class GeoTrellisRelation(sqlContext: SQLContext,
         rdd
           .map { case (sk: SpatialKey, tile: T) ⇒
             val entries = columnIndexes.map {
-              case 0 ⇒ sk
+              case 0 ⇒ sk.toRow
               case 1 ⇒ trans.keyToExtent(sk).toPolygon()
               case 2 ⇒ tile match {
                 case t: Tile ⇒ t
@@ -305,12 +304,14 @@ case class GeoTrellisRelation(sqlContext: SQLContext,
           case None ⇒ query.result
         }
 
+        println(rdd.toDebugString)
+
         rdd
           .map { case (stk: SpaceTimeKey, tile: T) ⇒
             val sk = stk.spatialKey
             val entries = columnIndexes.map {
-              case 0 ⇒ sk
-              case 1 ⇒ stk.temporalKey
+              case 0 ⇒ sk.toRow
+              case 1 ⇒ stk.temporalKey.toRow
               case 2 ⇒ new Timestamp(stk.temporalKey.instant)
               case 3 ⇒ trans.keyToExtent(stk).toPolygon()
               case 4 ⇒ tile match {

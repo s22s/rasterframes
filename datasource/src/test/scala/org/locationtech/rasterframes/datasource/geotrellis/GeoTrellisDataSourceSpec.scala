@@ -23,7 +23,6 @@ package org.locationtech.rasterframes.datasource.geotrellis
 import java.io.File
 import java.sql.Timestamp
 import java.time.ZonedDateTime
-
 import geotrellis.layer._
 import org.locationtech.rasterframes._
 import org.locationtech.rasterframes.datasource.DataSourceOptions
@@ -43,7 +42,7 @@ import org.apache.avro.generic._
 import org.apache.avro.{Schema, SchemaBuilder}
 import org.apache.hadoop.fs.FileUtil
 import org.apache.spark.sql.functions.{udf => sparkUdf}
-import org.apache.spark.sql.{DataFrame, Row}
+import org.apache.spark.sql.{DataFrame, Encoder, Encoders, Row}
 import org.apache.spark.storage.StorageLevel
 import org.locationtech.rasterframes.TestEnvironment
 import org.scalatest.{BeforeAndAfterAll, Inspectors}
@@ -61,7 +60,7 @@ class GeoTrellisDataSourceSpec
   lazy val sampleImageLayer = Layer(scratchDir.toUri, LayerId("sample", 0))
   val now = ZonedDateTime.now()
   val tileCoordRange = 2 to 5
-
+  override val sparkMaster = "local[1]"
   lazy val testRdd = {
     val ct = IntCellType
 
@@ -127,8 +126,8 @@ class GeoTrellisDataSourceSpec
   describe("DataSource reading") {
     def layerReader = spark.read.geotrellis
     it("should read tiles") {
-      val df = layerReader.loadLayer(layer)
-      assert(df.count === tileCoordRange.length * tileCoordRange.length)
+      val df = layerReader.loadLayer(layer).select("spatial_key")
+      assert(df.count() === tileCoordRange.length * tileCoordRange.length)
     }
 
     it("used produce tile UDT that we can manipulate") {
@@ -138,12 +137,12 @@ class GeoTrellisDataSourceSpec
     }
 
     it("should respect bbox query") {
+      //val boundKeys = KeyBounds(SpatialKey(3, 4), SpatialKey(4, 4))
       val boundKeys = KeyBounds(SpatialKey(3, 4), SpatialKey(4, 4))
       val  bbox = testRdd.metadata.layout
         .mapTransform(boundKeys.toGridBounds())
         .toPolygon()
       val wc = layerReader.loadLayer(layer).withCenter()
-
       withClue("literate API") {
         val df = wc.where(CENTER_COLUMN intersects bbox)
         assert(df.count() === boundKeys.toGridBounds.size)

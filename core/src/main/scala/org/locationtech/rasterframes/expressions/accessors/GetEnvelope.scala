@@ -28,7 +28,7 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, UnaryExpression}
 import org.apache.spark.sql.jts.AbstractGeometryUDT
 import org.apache.spark.sql.rf._
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{Column, TypedColumn}
+import org.apache.spark.sql.{Column, Encoders, TypedColumn}
 import org.locationtech.rasterframes.encoders.EnvelopeEncoder
 
 /**
@@ -60,7 +60,9 @@ case class GetEnvelope(child: Expression) extends UnaryExpression with CodegenFa
 }
 
 object GetEnvelope {
-  import org.locationtech.rasterframes.encoders.StandardEncoders._
-  def apply(col: Column): TypedColumn[Any, Envelope] =
+  //import org.locationtech.rasterframes.encoders.StandardEncoders.envelop
+  def apply(col: Column): TypedColumn[Any, Envelope] = {
+    implicit val enc = Encoders.bean(classOf[Envelope])
     new GetEnvelope(col.expr).asColumn.as[Envelope]
+  }
 }

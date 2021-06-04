@@ -25,6 +25,7 @@ import org.locationtech.rasterframes.encoders.CatalystSerializer._
 import org.locationtech.rasterframes.expressions.OnCellGridExpression
 import geotrellis.raster.{CellGrid, Dimensions}
 import org.apache.spark.sql._
+import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.{Expression, ExpressionDescription}
 import org.apache.spark.sql.catalyst.expressions.codegen.CodegenFallback
 
@@ -48,7 +49,8 @@ case class GetDimensions(child: Expression) extends OnCellGridExpression with Co
 }
 
 object GetDimensions {
-  import org.locationtech.rasterframes.encoders.StandardEncoders.tileDimensionsEncoder
-  def apply(col: Column): TypedColumn[Any, Dimensions[Int]] =
+  def apply(col: Column): TypedColumn[Any, Dimensions[Int]] = {
+    implicit val dimEncoder = ExpressionEncoder[Dimensions[Int]]
     new Column(new GetDimensions(col.expr)).as[Dimensions[Int]]
+  }
 }

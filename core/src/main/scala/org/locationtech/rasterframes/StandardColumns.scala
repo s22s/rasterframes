@@ -29,7 +29,6 @@ import geotrellis.layer._
 import geotrellis.vector.{Extent, ProjectedExtent}
 import org.apache.spark.sql.functions.col
 import org.locationtech.jts.geom.{Point => jtsPoint, Polygon => jtsPolygon}
-import org.locationtech.rasterframes.encoders.StandardEncoders.PrimitiveEncoders._
 import org.locationtech.rasterframes.tiles.ProjectedRasterTile
 
 /**
@@ -38,6 +37,7 @@ import org.locationtech.rasterframes.tiles.ProjectedRasterTile
  * @since 2/19/18
  */
 trait StandardColumns {
+  import org.locationtech.rasterframes.encoders.SparkBasicEncoders._
   /** Default RasterFrameLayer spatial column name. */
   val SPATIAL_KEY_COLUMN = col("spatial_key").as[SpatialKey]
 
@@ -69,7 +69,7 @@ trait StandardColumns {
 
   /** Default RasterFrameLayer tile column name. */
   // This is a `def` because `TileUDT` needs to be initialized first.
-  def TILE_COLUMN = col("tile").as[Tile]
+  def TILE_COLUMN = col("tile").as[Tile](singlebandTileEncoder)
 
   /** Default column name for a tile with its CRS and Extent. */
   def PROJECTED_RASTER_COLUMN = col("proj_raster").as[ProjectedRasterTile]

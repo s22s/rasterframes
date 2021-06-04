@@ -24,6 +24,7 @@ package org.locationtech.rasterframes.encoders
 import org.apache.spark.sql.{Encoder, Encoders}
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 
+import java.sql.Timestamp
 import scala.reflect.runtime.universe._
 
 /**
@@ -33,11 +34,15 @@ import scala.reflect.runtime.universe._
  */
 private[rasterframes] trait SparkBasicEncoders {
   implicit def arrayEnc[T: TypeTag]: Encoder[Array[T]] = ExpressionEncoder()
-  implicit val intEnc: Encoder[Int] = Encoders.scalaInt
-  implicit val longEnc: Encoder[Long] = Encoders.scalaLong
-  implicit val stringEnc: Encoder[String] = Encoders.STRING
-  implicit val doubleEnc: Encoder[Double] = Encoders.scalaDouble
-  implicit val boolEnc: Encoder[Boolean] = Encoders.scalaBoolean
+  implicit def intEnc: Encoder[Int] = Encoders.scalaInt
+  implicit def longEnc: Encoder[Long] = Encoders.scalaLong
+  implicit def stringEnc: Encoder[String] = Encoders.STRING
+  implicit def doubleEnc: Encoder[Double] = Encoders.scalaDouble
+  implicit def boolEnc: Encoder[Boolean] = Encoders.scalaBoolean
+  implicit def timeEnc: Encoder[Timestamp] = Encoders.TIMESTAMP
+  implicit def product[T <: Product : TypeTag]: Encoder[T] = Encoders.product
+  implicit def strMapEncoder: Encoder[Map[String, String]] = ExpressionEncoder()
+
 }
 
 object SparkBasicEncoders extends SparkBasicEncoders

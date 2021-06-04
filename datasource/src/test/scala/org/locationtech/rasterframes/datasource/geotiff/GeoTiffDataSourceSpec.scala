@@ -41,7 +41,7 @@ class GeoTiffDataSourceSpec
 
     it("should read sample GeoTiff") {
       val rf = spark.read.format("geotiff").load(cogPath.toASCIIString).asLayer
-
+      rf.foreach(_ => ())
       assert(rf.count() > 10)
     }
 

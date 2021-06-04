@@ -22,10 +22,10 @@
 package org.locationtech.rasterframes.expressions.accessors
 
 import org.locationtech.rasterframes.encoders.CatalystSerializer._
-import org.locationtech.rasterframes.encoders.StandardEncoders.extentEncoder
 import org.locationtech.rasterframes.expressions.OnTileContextExpression
 import geotrellis.vector.Extent
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.codegen.CodegenFallback
 import org.apache.spark.sql.types._
@@ -51,6 +51,8 @@ case class GetExtent(child: Expression) extends OnTileContextExpression with Cod
 }
 
 object GetExtent {
-  def apply(col: Column): TypedColumn[Any, Extent] =
+  def apply(col: Column): TypedColumn[Any, Extent] = {
+    implicit val extentEncoder = ExpressionEncoder[Extent]()
     new Column(new GetExtent(col.expr)).as[Extent]
+  }
 }

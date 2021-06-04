@@ -163,6 +163,20 @@ trait StandardSerializers {
     )
   }
 
+  implicit val temporalKeySerializer: CatalystSerializer[TemporalKey] = new CatalystSerializer[TemporalKey] {
+    override def schema: StructType = StructType(Seq(
+      StructField("instant", LongType, false)
+    ))
+
+    override protected def to[R](t: TemporalKey, io: CatalystIO[R]): R = io.create(
+      t.instant
+    )
+
+    override protected def from[R](t: R, io: CatalystIO[R]): TemporalKey = TemporalKey(
+      io.getLong(t, 0)
+    )
+  }
+
   implicit val spacetimeKeySerializer: CatalystSerializer[SpaceTimeKey] = new CatalystSerializer[SpaceTimeKey] {
     override val schema: StructType = StructType(Seq(
       StructField("col", IntegerType, false),

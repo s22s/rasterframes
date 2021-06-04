@@ -104,7 +104,7 @@ case class GeoTiffRelation(sqlContext: SQLContext, uri: URI) extends BaseRelatio
           // transform result because the layout is directly from the TIFF
           val gb = trans.extentToBounds(pe.extent)
           val entries = columnIndexes.map {
-            case 0 => SpatialKey(gb.colMin, gb.rowMin)
+            case 0 => SpatialKey(gb.colMin, gb.rowMin).toRow
             case 1 => pe.extent.toRow
             case 2 => encodedCRS
             case 3 => metadata
@@ -128,7 +128,7 @@ case class GeoTiffRelation(sqlContext: SQLContext, uri: URI) extends BaseRelatio
       rdd.tileToLayout(tlm)
         .map { case (sk, tiles) ⇒
           val entries = columnIndexes.map {
-            case 0 => sk
+            case 0 => sk.toRow
             case 1 => trans.keyToExtent(sk).toRow
             case 2 => encodedCRS
             case 3 => metadata
